@@ -8,7 +8,7 @@
   <body>
     <h1>Course Submission Form</h1>
 
-    <form method="post" action="/submissions">
+    <form id="course-form">
       <h2>Faculty Details</h2>
 
       <label for="faculty_name">Faculty Name</label><br />
@@ -84,7 +84,7 @@
         cols="90"
         required
       ></textarea>
-      <p>Enter the topics, units, or rough syllabus content.</p>
+      <p>Enter topics, units, or rough syllabus content.</p>
 
       <label for="text_books">Textbook References</label><br />
       <textarea
@@ -114,7 +114,84 @@
       ></textarea
       ><br /><br />
 
-      <button type="submit">Submit Course</button>
+      <button type="submit" id="submit-button">Submit Course</button>
     </form>
+
+    <hr />
+
+    <div id="result"></div>
+
+    <script>
+      const form = document.getElementById("course-form");
+      const result = document.getElementById("result");
+      const submitButton = document.getElementById("submit-button");
+
+      form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        result.innerHTML = "";
+        submitButton.disabled = true;
+        submitButton.textContent = "Submitting...";
+
+        const payload = {
+          faculty_name: document.getElementById("faculty_name").value.trim(),
+          faculty_email: document.getElementById("faculty_email").value.trim(),
+          offering_department: document
+            .getElementById("offering_department")
+            .value.trim(),
+          target_department: document
+            .getElementById("target_department")
+            .value.trim(),
+          semester: Number(document.getElementById("semester").value),
+          course_title: document.getElementById("course_title").value.trim(),
+          credit_category: Number(
+            document.getElementById("credit_category").value,
+          ),
+          raw_course_content: document
+            .getElementById("raw_course_content")
+            .value.trim(),
+          text_books: document.getElementById("text_books").value.trim(),
+          reference_books: document
+            .getElementById("reference_books")
+            .value.trim(),
+          preferred_tools: document
+            .getElementById("preferred_tools")
+            .value.trim(),
+        };
+
+        try {
+          const response = await fetch("/api/submissions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            result.innerHTML = `
+                        <h2>Submission Rejected</h2>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+            return;
+          }
+
+          result.innerHTML = `
+                    <h2>Submission Received</h2>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+        } catch (error) {
+          result.innerHTML = `
+                    <h2>Network Error</h2>
+                    <p>Could not submit the course. Check if the backend is running.</p>
+                `;
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = "Submit Course";
+        }
+      });
+    </script>
   </body>
 </html>
