@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Course Submission — PESU</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>Course Submission</h1>
+        <p class="subtitle">Fill in the course details below.</p>
+
+        <form id="course-form">
+          <fieldset>
+            <legend>Faculty Details</legend>
+            <label for="faculty_name">Name</label>
+            <input type="text" id="faculty_name" name="faculty_name" required />
+
+            <label for="faculty_email">Email</label>
+            <input type="email" id="faculty_email" name="faculty_email" required />
+
+            <label for="offering_department">Offering Department</label>
+            <input type="text" id="offering_department" name="offering_department" required />
+            <span class="hint">e.g. Mathematics, Computer Science</span>
+          </fieldset>
+
+          <fieldset>
+            <legend>Course Details</legend>
+            <label for="target_department">Target Department / Program</label>
+            <input type="text" id="target_department" name="target_department" required />
+            <span class="hint">e.g. CSE, AIML, ECE</span>
+
+            <label for="semester">Semester</label>
+            <input type="number" id="semester" name="semester" min="1" max="8" required />
+
+            <label for="course_title">Course Title</label>
+            <input type="text" id="course_title" name="course_title" required />
+
+            <label for="credit_category">Credit Category</label>
+            <select id="credit_category" name="credit_category" required>
+              <option value="">Select credit category</option>
+              <option value="0">0 Credits</option>
+              <option value="2">2 Credits</option>
+              <option value="4">4 Credits</option>
+              <option value="5">5 Credits</option>
+            </select>
+          </fieldset>
+
+          <fieldset>
+            <legend>Academic Content</legend>
+            <label for="raw_course_content">Course Content</label>
+            <textarea id="raw_course_content" name="raw_course_content" rows="8" required></textarea>
+            <span class="hint">Topics, units, or rough syllabus.</span>
+
+            <label for="text_books">Textbook References</label>
+            <textarea id="text_books" name="text_books" rows="4" required></textarea>
+
+            <label for="reference_books">Reference Books <span class="optional">(optional)</span></label>
+            <textarea id="reference_books" name="reference_books" rows="4"></textarea>
+
+            <label for="preferred_tools">Preferred Tools / Languages <span class="optional">(optional)</span></label>
+            <textarea id="preferred_tools" name="preferred_tools" rows="3"></textarea>
+          </fieldset>
+
+          <button type="submit" id="submit-btn">Submit Course</button>
+        </form>
+
+        <div id="result" class="hidden"></div>
+      </div>
+    </div>
+  </body>
+</html>
