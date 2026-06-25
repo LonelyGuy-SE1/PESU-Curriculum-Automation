@@ -1,20 +1,20 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+#run using uv run fastapi dev 
+
+from fastapi import FastAPI
+from app.api import router
+#from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 
-app = FastAPI(
-    title="PESU Curriculum Automation",
-    version="0.1.0",
-)
+app=FastAPI(title="PESU Curriculum Automation")
+"""
+app.add_middleware(
+    CORSMiddleware,
+     allow_origins=["*"],
+     allow_methods=["*"],
+     allow_headers=["*"],
+)"""
 
+app.include_router(router, prefix="/api")       
 
-templates = Jinja2Templates(directory="app/templates")
-
-
-@app.get("/", response_class=HTMLResponse)
-def show_input_form(request: Request):
-    return templates.TemplateResponse(
-        "input_form.html",
-        {"request": request},
-    )
+app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")

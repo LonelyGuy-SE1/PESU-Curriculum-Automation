@@ -16,25 +16,49 @@
         <form id="course-form">
           <fieldset>
             <legend>Faculty Details</legend>
-            <label for="faculty_name">Name</label>
-            <input type="text" id="faculty_name" name="faculty_name" required />
 
             <label for="faculty_email">Email</label>
             <input type="email" id="faculty_email" name="faculty_email" required />
 
             <label for="offering_department">Offering Department</label>
-            <input type="text" id="offering_department" name="offering_department" required />
-            <span class="hint">e.g. Mathematics, Computer Science</span>
+
+            <select id="offering_department" name="offering_department" required>
+              <option value="">Select offering department</option>
+              <option value="MA">Mathematics (MA)</option>
+              <option value="CS">Computer Science (CS)</option>
+              <option value="UZ">(UZ)</option>
+            </select>
+
+            <span class="hint">e.g. Mathematics, Computer Science (MA, CS)</span>
+
           </fieldset>
 
           <fieldset>
             <legend>Course Details</legend>
-            <label for="target_department">Target Department / Program</label>
-            <input type="text" id="target_department" name="target_department" required />
-            <span class="hint">e.g. CSE, AIML, ECE</span>
 
+            <label for="target_department">Target Department / Program</label>
+            <select id="target_department" name="target_department" required>
+              <option value="">Select target department</option>
+              <option value="CSE">Computer Science and Engineering (CSE)</option>
+              <option value="AIML">Artificial Intelligence and Machine Learning (AIML)</option>
+              <option value="ECE">Electronics and Communication Engineering (ECE)</option>
+              <option value="ME">Mechanical Engineering (ME)</option>
+              <option value="EEE">Electronics and Electrical Engineering (EEE)</option>
+              <option value="BT">Biotechnology (BT)</option>
+            </select>
+          
             <label for="semester">Semester</label>
-            <input type="number" id="semester" name="semester" min="1" max="8" required />
+            <select id="semester" name="semester" required>
+              <option value="">Select semester</option>
+              <option value="1">Semester 1</option>
+              <option value="2">Semester 2</option>
+              <option value="3">Semester 3</option>
+              <option value="4">Semester 4</option>
+              <option value="5">Semester 5</option>
+              <option value="6">Semester 6</option>
+              <option value="7">Semester 7</option>
+              <option value="8">Semester 8</option>
+            </select>
 
             <label for="course_title">Course Title</label>
             <input type="text" id="course_title" name="course_title" required />
@@ -58,7 +82,7 @@
             <label for="text_books">Textbook References</label>
             <textarea id="text_books" name="text_books" rows="4" required></textarea>
 
-            <label for="reference_books">Reference Books <span class="optional">(optional)</span></label>
+            <label for="reference_books">Other Suggested Reference Books <span class="optional">(optional)</span></label>
             <textarea id="reference_books" name="reference_books" rows="4"></textarea>
 
             <label for="preferred_tools">Preferred Tools / Languages <span class="optional">(optional)</span></label>

@@ -8,8 +8,6 @@ document.addEventListener("DOMContentLoaded", () => {
     result.className = "hidden";
 
     const data = Object.fromEntries(new FormData(form));
-    data.semester = Number(data.semester);
-    data.credit_category = Number(data.credit_category);
 
     btn.disabled = true;
     btn.textContent = "Submitting...";
@@ -24,8 +22,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const body = await res.json();
 
       if (!res.ok) {
-        const issues = body.detail?.issues ?? [];
-        result.textContent = body.detail?.message + "\n" + issues.join("\n");
+        const msgs = body.detail?.map(e => e.msg) ?? [];
+        result.textContent = msgs.join("\n");
         result.className = "error";
       } else {
         result.textContent = "Submission received.";
