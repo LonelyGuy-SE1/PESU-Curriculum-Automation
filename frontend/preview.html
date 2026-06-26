@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Curriculum Preview</title>
+<style>
+  body { margin: 0; background: #525659; font-family: Calibri, sans-serif; }
+  #viewer { display: flex; flex-direction: column; align-items: center; padding: 24px 0; gap: 24px; }
+  .page { width: 210mm; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.28); }
+</style>
+</head>
+<body>
+<div id="viewer"></div>
+<script>
+const sem = new URLSearchParams(location.search).get("sem") || "1";
+
+fetch(`/api/preview/semester/${sem}/courses`)
+  .then(r => r.json())
+  .then(({ course_ids }) => {
+    Promise.all(course_ids.map(id =>
+      fetch(`/api/preview/course/${id}`).then(r => r.text())
+    )).then(pages => {
+      const viewer = document.getElementById("viewer");
+      pages.forEach(html => {
+        const div = document.createElement("div");
+        div.className = "page";
+        div.innerHTML = html;
+        viewer.appendChild(div);
+      });
+    });
+  });
+</script>
+</body>
+</html>

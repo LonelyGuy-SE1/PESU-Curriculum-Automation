@@ -1,8 +1,15 @@
 from fastapi import APIRouter
+from fastapi.responses import HTMLResponse
+from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel,Field, field_validator
 from typing import Literal
 
+from app.preview import build_course_preview
+from app.supabase import supabase
+
 router=APIRouter()
+
+templates=Environment(loader=FileSystemLoader("app/templates"))
 
 class CourseSubmission(BaseModel):
     faculty_email: str=Field(min_length=3, max_length=254)
@@ -24,8 +31,30 @@ class CourseSubmission(BaseModel):
     
 @router.post("/submissions")
 def receive(data: CourseSubmission):
+    """
     print("=== NEW SUBMISSION ===")
     for field, values in data.model_dump().items():
         print(f"{field}: {values}")
     print("======================")
     return {"message": "Submission received successfully!", "submission": data.model_dump()}
+    """
+    
+    data_dict=data.model_dump()
+    data_dict["status"]="pending"
+    result=supabase.table("submissions").insert(data_dict).execute()
+    print("New Submission Received! Course Title: ", data.course_title)
+    return {"message":"Submission Received!", "submission":result.data[0]}
+
+@router.get("/preview/semester/{sem}/courses")
+def list_courses(sem:str):  # sem will be used once semester column is added
+    result=supabase.table("refined_submissions").select("id").execute()
+    rows: list[dict] = result.data # type: ignore[index]
+    return {"course_ids": [r["id"] for r in rows]}
+
+@router.get("/preview/course/{refined_id}")
+def preview_course(refined_id:int):
+    result=supabase.table("refined_submissions").select("*").eq("id", refined_id).single().execute()
+    row: dict = result.data # type: ignore[index]
+    course=build_course_preview(row)
+    html=templates.get_template("jinja_sample.html").render(course=course, curriculum_year="", page_number="")
+    return HTMLResponse(content=html)

@@ -1,0 +1,8 @@
+{
+    "rewrites":[
+        {
+            "source": "/api/(.*)",
+            "destination": "https://lonelyguyse1-curriculum-backend.hf.space/api/$1"
+        }
+    ]
+}
