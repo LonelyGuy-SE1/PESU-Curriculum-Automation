@@ -2,6 +2,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel,Field, field_validator
 from typing import Literal
 
+from app.supabase import supabase
+
 router=APIRouter()
 
 class CourseSubmission(BaseModel):
@@ -24,8 +26,16 @@ class CourseSubmission(BaseModel):
     
 @router.post("/submissions")
 def receive(data: CourseSubmission):
+    """
     print("=== NEW SUBMISSION ===")
     for field, values in data.model_dump().items():
         print(f"{field}: {values}")
     print("======================")
     return {"message": "Submission received successfully!", "submission": data.model_dump()}
+    """
+    
+    data_dict=data.model_dump()
+    data_dict["status"]="pending"
+    result=supabase.table("submissions").insert(data_dict).execute()
+    print("New Submission Received! Course Title: ", data.course_title)
+    return {"message":"Submission Received!", "submission":result.data[0]}
