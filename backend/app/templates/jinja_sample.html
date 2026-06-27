@@ -1242,6 +1242,14 @@
         font-family: Arial, sans-serif;
         white-space: nowrap;
       }
+      .footer-center {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      .footer-page {
+        margin-left: auto;
+      }
     </style>
   </head>
   <body class="c71 doc-content">
@@ -1452,8 +1460,9 @@
     </table>
 
 <div class="page-footer">
-  <span class="footer-text">P.E.S. University                                                  Curriculum :- 2025-2026</span>
-  <span class="footer-text" style="margin-left: auto">{{ page_number }}</span>
+  <span class="footer-text">P.E.S. University</span>
+  <span class="footer-text footer-center">Curriculum :- {{ curriculum_year }}</span>
+  <span class="footer-text footer-page">{{ page_number }}</span>
 </div>
   </body>
 </html>
