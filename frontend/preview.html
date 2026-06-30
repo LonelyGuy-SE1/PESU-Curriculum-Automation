@@ -1,19 +1,137 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Curriculum Preview</title>
-<style>
-body{margin:0;background:#525659}
-iframe{width:100%;height:100vh;border:none}
-</style>
-</head>
-<body>
-<iframe src="/api/preview/semester/1/pdf"></iframe>
-<script>
-const sem=new URLSearchParams(location.search).get("sem")||"1";
-document.querySelector("iframe").src="/api/preview/semester/"+sem+"/pdf";
-</script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Curriculum Preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        background: #4d5259;
+        color: #111827;
+        font-family: Arial, sans-serif;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 52px;
+        padding: 8px 12px;
+        background: #fff;
+        border-bottom: 1px solid #d1d5db;
+      }
+
+      select,
+      a {
+        height: 34px;
+        border: 1px solid #9ca3af;
+        border-radius: 4px;
+        background: #fff;
+        color: #111827;
+        font-size: 14px;
+      }
+
+      select {
+        padding: 0 8px;
+      }
+
+      a {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        text-decoration: none;
+      }
+
+      #status {
+        margin-left: auto;
+        color: #4b5563;
+        font-size: 14px;
+      }
+
+      iframe {
+        display: block;
+        width: 100%;
+        height: calc(100dvh - 52px);
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <select id="semester" aria-label="Semester">
+        <option value="all">Overall</option>
+        <option value="1">Semester 1</option>
+        <option value="2">Semester 2</option>
+        <option value="3">Semester 3</option>
+        <option value="4">Semester 4</option>
+        <option value="5">Semester 5</option>
+        <option value="6">Semester 6</option>
+        <option value="7">Semester 7</option>
+        <option value="8">Semester 8</option>
+      </select>
+      <a id="open" target="_blank" rel="noreferrer">Open</a>
+      <a id="download">Download</a>
+      <span id="status"></span>
+    </div>
+    <iframe id="viewer" title="Curriculum PDF"></iframe>
+
+    <script>
+      const params = new URLSearchParams(location.search);
+      const requestedSemester = params.get("sem");
+      const semester = document.getElementById("semester");
+      const viewer = document.getElementById("viewer");
+      const openLink = document.getElementById("open");
+      const downloadLink = document.getElementById("download");
+      const statusText = document.getElementById("status");
+
+      async function courseIds(sem) {
+        const url = sem === "all" ? "/api/preview/courses" : `/api/preview/semester/${sem}/courses`;
+        const response = await fetch(url);
+        if (!response.ok) return [];
+        const body = await response.json();
+        return body.course_ids || [];
+      }
+
+      async function firstAvailableSemester() {
+        if ((await courseIds("all")).length) return "all";
+        for (let sem = 1; sem <= 8; sem += 1) {
+          if ((await courseIds(sem)).length) return String(sem);
+        }
+        return "all";
+      }
+
+      async function loadSemester(sem) {
+        semester.value = sem;
+        statusText.textContent = "Loading...";
+
+        if (!(await courseIds(sem)).length) {
+          viewer.removeAttribute("src");
+          openLink.removeAttribute("href");
+          downloadLink.removeAttribute("href");
+          statusText.textContent = sem === "all" ? "No refined courses found." : `No refined courses found for Semester ${sem}.`;
+          return;
+        }
+
+        const pdf = sem === "all" ? "/api/preview/pdf" : `/api/preview/semester/${sem}/pdf`;
+        viewer.src = pdf;
+        openLink.href = pdf;
+        downloadLink.href = `${pdf}?download=true`;
+        statusText.textContent = sem === "all" ? "Overall" : `Semester ${sem}`;
+      }
+
+      semester.addEventListener("change", () => {
+        loadSemester(semester.value);
+      });
+
+      (requestedSemester ? Promise.resolve(requestedSemester) : firstAvailableSemester()).then(loadSemester).catch(() => {
+        statusText.textContent = "Backend unavailable.";
+      });
+    </script>
+  </body>
 </html>

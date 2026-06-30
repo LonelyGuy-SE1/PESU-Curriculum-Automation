@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Editor - PESU</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        background: #f0f2f5;
+        color: #111827;
+        font-family: Arial, sans-serif;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 52px;
+        padding: 8px 12px;
+        background: #fff;
+        border-bottom: 1px solid #d1d5db;
+      }
+
+      select,
+      button,
+      a {
+        height: 34px;
+        border: 1px solid #9ca3af;
+        border-radius: 4px;
+        background: #fff;
+        color: #111827;
+        font-size: 14px;
+      }
+
+      select {
+        min-width: 140px;
+        padding: 0 8px;
+      }
+
+      button,
+      a {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .save {
+        background: #00377b;
+        color: #fff;
+        border-color: #00377b;
+      }
+
+      #status {
+        margin-left: auto;
+        color: #4b5563;
+        font-size: 14px;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(360px, 1fr) minmax(420px, 1fr);
+        gap: 12px;
+        height: calc(100dvh - 52px);
+        padding: 12px;
+      }
+
+      textarea,
+      iframe {
+        width: 100%;
+        height: 100%;
+        border: 1px solid #d1d5db;
+        background: #fff;
+      }
+
+      textarea {
+        padding: 12px;
+        resize: none;
+        color: #111827;
+        font: 13px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
+
+      iframe {
+        display: block;
+      }
+
+      @media (max-width: 900px) {
+        .workspace {
+          grid-template-columns: 1fr;
+          height: auto;
+        }
+
+        textarea,
+        iframe {
+          height: 70dvh;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <select id="semester" aria-label="Semester">
+        <option value="1">Semester 1</option>
+        <option value="2">Semester 2</option>
+        <option value="3">Semester 3</option>
+        <option value="4">Semester 4</option>
+        <option value="5">Semester 5</option>
+        <option value="6">Semester 6</option>
+        <option value="7">Semester 7</option>
+        <option value="8">Semester 8</option>
+      </select>
+      <select id="course" aria-label="Course"></select>
+      <button class="save" id="save" type="button">Save</button>
+      <a id="preview" target="_blank" rel="noreferrer">Preview</a>
+      <span id="status"></span>
+    </div>
+    <main class="workspace">
+      <textarea id="editor" spellcheck="false"></textarea>
+      <iframe id="pdf" title="Course preview"></iframe>
+    </main>
+
+    <script>
+      const semester = document.getElementById("semester");
+      const course = document.getElementById("course");
+      const save = document.getElementById("save");
+      const preview = document.getElementById("preview");
+      const editor = document.getElementById("editor");
+      const pdf = document.getElementById("pdf");
+      const statusText = document.getElementById("status");
+
+      async function courseIds(sem) {
+        const response = await fetch(`/api/preview/semester/${sem}/courses`);
+        if (!response.ok) return [];
+        const body = await response.json();
+        return body.course_ids || [];
+      }
+
+      async function firstAvailableSemester() {
+        for (let sem = 1; sem <= 8; sem += 1) {
+          if ((await courseIds(sem)).length) return String(sem);
+        }
+        return "1";
+      }
+
+      async function loadCourse(id) {
+        const response = await fetch(`/api/refined/${id}`);
+        if (!response.ok) throw new Error("Unable to load course");
+        const row = await response.json();
+        editor.value = JSON.stringify(row.fields || {}, null, 2);
+        pdf.src = `/api/preview/course/${id}`;
+        preview.href = `/api/preview/course/${id}`;
+        statusText.textContent = row.fields?.course_title || `Course ${id}`;
+      }
+
+      async function loadSemester(sem) {
+        semester.value = sem;
+        course.innerHTML = "";
+        editor.value = "";
+        pdf.removeAttribute("src");
+        statusText.textContent = "Loading...";
+
+        const ids = await courseIds(sem);
+        if (!ids.length) {
+          statusText.textContent = `No refined courses found for Semester ${sem}.`;
+          return;
+        }
+
+        ids.forEach((id) => {
+          const option = document.createElement("option");
+          option.value = id;
+          option.textContent = `Course ${id}`;
+          course.appendChild(option);
+        });
+        await loadCourse(ids[0]);
+      }
+
+      semester.addEventListener("change", () => loadSemester(semester.value));
+      course.addEventListener("change", () => loadCourse(course.value));
+
+      save.addEventListener("click", async () => {
+        statusText.textContent = "Saving...";
+        const parsed = JSON.parse(editor.value);
+        const response = await fetch(`/api/refined/${course.value}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fields: parsed }),
+        });
+        if (!response.ok) {
+          const body = await response.json();
+          throw new Error(body.detail || "Save failed");
+        }
+        await loadCourse(course.value);
+      });
+
+      window.addEventListener("error", (event) => {
+        statusText.textContent = event.message;
+      });
+
+      firstAvailableSemester().then(loadSemester).catch(() => {
+        statusText.textContent = "Backend unavailable.";
+      });
+    </script>
+  </body>
+</html>

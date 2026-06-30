@@ -157,3 +157,45 @@ button:disabled {
 .hidden {
   display: none;
 }
+
+.home-shell {
+  width: 100%;
+  max-width: 760px;
+}
+
+.home-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+}
+
+.surface-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.surface-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.surface-link:hover {
+  border-color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .surface-grid {
+    grid-template-columns: 1fr;
+  }
+}

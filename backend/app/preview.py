@@ -1,23 +1,100 @@
 import json
+import re
+
+from app.services.deterministic import compute_course_type, compute_hours, compute_program
+
+BOOK_ITEM = re.compile(r"\s+(?=\d+[.)]\s+)")
+BOOK_START = re.compile(r"^\s*\d+[.)]\s*(.+)$")
+BOOK_SPLIT = re.compile(r"(?<=\d{4}\.)\s+(?=[\"\u201c])")
+
+
+def _lines(value) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [line.strip() for line in str(value).splitlines() if line.strip()]
+
+
+def _books(value) -> list[str]:
+    books = []
+    for line in _lines(value):
+        for item in BOOK_ITEM.split(line):
+            for part in BOOK_SPLIT.split(item):
+                part = part.strip()
+                if not part:
+                    continue
+                match = BOOK_START.match(part)
+                if match:
+                    books.append(match.group(1).strip())
+                elif books and part == item:
+                    books[-1] = f"{books[-1]} {part}".strip()
+                else:
+                    books.append(part)
+    return books
+
+
+def _content(row: dict) -> dict:
+    raw = row.get("refined_content") or {}
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        return json.loads(raw)
+    return {}
+
+
+def _text(*values) -> str:
+    for value in values:
+        if isinstance(value, str):
+            text = value.strip()
+            if text and text != "-":
+                return text
+    return ""
 
 
 def build_course_preview(row: dict) -> dict:
-    content = json.loads(row.get("refined_content") or "{}")
+    content = _content(row)
+    submission = row.get("_submission") or {}
+    credit_category = str(submission.get("credit_category") or row.get("credit_category") or content.get("credits") or "")
+    target_department = str(submission.get("target_department") or "")
+
+    hours = {
+        "lecture_hours": row.get("lecture_hours", content.get("lecture_hours", 0)),
+        "tutorial_hours": row.get("tutorial_hours", content.get("tutorial_hours", 0)),
+        "practical_hours": row.get("practical_hours", content.get("practical_hours", 0)),
+        "self_study": row.get("self_study", content.get("self_study", 0)),
+        "credits": row.get("credits", content.get("credits", 0)),
+    }
+    if credit_category:
+        hours = compute_hours(credit_category)
+
+    program = row.get("program") or content.get("program") or ""
+    if target_department:
+        program = compute_program(target_department)
+
+    course_type = row.get("course_type") or content.get("course_type") or ""
+    if credit_category:
+        course_type = compute_course_type(credit_category)
+
+    practical_hours = int(hours["practical_hours"] or 0)
     return {
-        "course_code": str(content.get("course_code", "")),
-        "course_title": str(content.get("course_title", "")),
-        "program": str(content.get("program", "")),
-        "lecture_hours": str(content.get("lecture_hours", 0)),
-        "tutorial_hours": str(content.get("tutorial_hours", 0)),
-        "practical_hours": str(content.get("practical_hours", 0)),
-        "self_study": str(content.get("self_study", 0)),
-        "credits": str(content.get("credits", 0)),
-        "semester": str(content.get("semester", "")),
-        "course_type": str(content.get("course_type", "")),
-        "tools_languages": str(content.get("tools_languages", "")),
-        "desirable_knowledge": str(content.get("desirable_knowledge", "")),
-        "prelude": row.get("prelude") or content.get("prelude", ""),
-        "objectives": row.get("objectives") or content.get("objectives", []),
-        "units": content.get("units", []),
-        "lab_experiments": content.get("lab_experiments", []),
+        "course_code": str(row.get("course_code") or content.get("course_code") or ""),
+        "course_title": str(row.get("course_title") or content.get("course_title") or ""),
+        "program": str(program),
+        "lecture_hours": str(hours["lecture_hours"]),
+        "tutorial_hours": str(hours["tutorial_hours"]),
+        "practical_hours": str(practical_hours),
+        "self_study": str(hours["self_study"]),
+        "credits": str(hours["credits"]),
+        "semester": str(row.get("semester") or content.get("semester") or ""),
+        "course_type": str(course_type),
+        "tools_languages": _text(row.get("tools_languages"), content.get("tools_languages"), submission.get("preferred_tools")),
+        "desirable_knowledge": _text(row.get("desirable_knowledge"), content.get("desirable_knowledge")),
+        "prelude": row.get("prelude") or content.get("prelude") or "",
+        "objectives": _lines(row.get("objectives") or content.get("objectives"))[:4],
+        "course_outcomes": _lines(row.get("course_outcomes") or content.get("course_outcomes"))[:4],
+        "units": row.get("units") or content.get("units") or [],
+        "lab_experiments": _lines(row.get("lab_experiments") or content.get("lab_experiments"))[:10] if practical_hours else [],
+        "text_books": _books(row.get("text_books") or content.get("text_books")) or _books(submission.get("text_books")),
+        "reference_books": _books(row.get("reference_books") or content.get("reference_books")) or _books(submission.get("reference_books")),
     }
