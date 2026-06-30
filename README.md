@@ -1,3 +1,12 @@
+---
+title: Curriculum Backend
+colorFrom: blue
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Curriculum Automation
 
 ## Phase 1 Flow Proposal
