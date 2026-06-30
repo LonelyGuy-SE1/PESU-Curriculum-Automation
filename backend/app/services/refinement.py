@@ -20,8 +20,9 @@ Rules:
 - Correct spelling and grammar in syllabus text without changing meaning.
 - Do not invent course codes, books, references, departments, or credits.
 - Generate missing tools, objectives, outcomes, and prelude from the submitted course scope.
-- Generate tools/languages from preferred tools first; otherwise infer only from the submitted course scope.
-- Generate desirable knowledge only from the supplied previously completed courses. Return an empty string when none apply.
+- For tools/languages, use Preferred Tools / Languages when provided; otherwise identify course-specific tools, languages, platforms, or AI tools from Raw Course Content.
+- Do not use canned defaults for tools/languages.
+- For desirable knowledge, use only relevant knowledge from Previously Completed Courses. Return an empty string when none apply.
 - Use 3 or 4 course objectives as direct action statements.
 - Use 3 or 4 course outcomes as measurable learner achievements.
 - Return exactly 4 units.
@@ -38,8 +39,8 @@ SCHEMA = """{
   "course_outcomes": ["3 to 4 measurable outcomes"],
   "units": [{"title": "Unit 1: Title", "content": "compact topic list", "hours": 14}],
   "lab_experiments": ["concise lab item"],
-  "tools_languages": "tools and languages aligned to the course scope",
-  "desirable_knowledge": "comma-separated prior course titles only, or empty string",
+  "tools_languages": "course-specific tools, languages, platforms, or AI tools",
+  "desirable_knowledge": "short text based only on previously completed courses, or empty string",
   "text_books": ["submitted text books only"],
   "reference_books": ["submitted reference books only"]
 }"""
@@ -133,21 +134,6 @@ def _fit_four_units(units: list[dict], raw_content: str) -> list[dict]:
     return units
 
 
-def _infer_tools(sub: dict) -> str:
-    text = f"{sub.get('course_title', '')} {sub.get('raw_course_content', '')}".lower()
-    if any(term in text for term in ("machine learning", "artificial intelligence", "deep learning", "data science")):
-        return "Python, Jupyter Notebook"
-    if any(term in text for term in ("database", "sql", "dbms")):
-        return "SQL, PostgreSQL or MySQL"
-    if any(term in text for term in ("web", "html", "css", "javascript", "react")):
-        return "HTML, CSS, JavaScript"
-    if any(term in text for term in ("python", "programming")):
-        return "Python"
-    if any(term in text for term in ("c++", "cpp", "data structures", "algorithms")):
-        return "C++17"
-    return ""
-
-
 def _units(value) -> list[dict]:
     units = []
     for item in value if isinstance(value, list) else []:
@@ -208,9 +194,9 @@ def _prior_course_titles(sub: dict) -> list[str]:
 
 
 def _desirable(value, prior_courses: list[str]) -> str:
-    text = " ".join(_lines(value)).lower()
-    selected = [course for course in prior_courses if course.lower() in text]
-    return ", ".join(selected)
+    if not prior_courses:
+        return ""
+    return _text(value)
 
 
 def _courses_text(courses: list[str]) -> str:
@@ -240,7 +226,7 @@ def build_refined_payload(sub: dict, out: dict, prior_courses: list[str] | None 
         "course_outcomes": course_outcomes,
         "units": units,
         "lab_experiments": _lines(out.get("lab_experiments"))[:10] if det["practical_hours"] else [],
-        "tools_languages": _text(out.get("tools_languages"), sub.get("preferred_tools"), _infer_tools(sub)),
+        "tools_languages": _text(out.get("tools_languages"), sub.get("preferred_tools")),
         "desirable_knowledge": _desirable(out.get("desirable_knowledge"), prior_courses),
         "text_books": _books(sub["text_books"]),
         "reference_books": _books(sub.get("reference_books")),
@@ -255,7 +241,7 @@ def refine(submission_id: int):
     total_unit_hours = det["lecture_hours"] * 14
     prior_courses = _prior_course_titles(sub)
 
-    prompt = f"""Return JSON matching this schema:
+    prompt = f"""Return JSON matching this schema. Include every key:
 {SCHEMA}
 
 Course Title: {sub["course_title"]}
