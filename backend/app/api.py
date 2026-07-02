@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
+import sentry_sdk
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
 from jinja2 import Environment, FileSystemLoader
@@ -78,7 +79,8 @@ class CourseSubmission(BaseModel):
 def refine_later(submission_id: int) -> None:
     try:
         refine(submission_id)
-    except Exception:
+    except Exception as exc:
+        sentry_sdk.capture_exception(exc)
         supabase.table("submissions").update({"status": "refine_failed"}).eq("id", submission_id).execute()
 
 

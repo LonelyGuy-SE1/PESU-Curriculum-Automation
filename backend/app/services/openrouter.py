@@ -15,6 +15,9 @@ def call(system: str, user: str) -> dict:
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         })
         r.raise_for_status()
-        text = r.json()["choices"][0]["message"]["content"]
+        data = r.json()
+        if "choices" not in data:
+            raise RuntimeError(f"OpenRouter response missing choices: {data.get('error') or data}")
+        text = data["choices"][0]["message"]["content"]
         text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         return json.loads(text)
