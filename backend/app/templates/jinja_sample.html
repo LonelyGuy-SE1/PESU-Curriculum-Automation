@@ -139,6 +139,11 @@
         text-align: right;
       }
 
+      .resource-link {
+        color: inherit;
+        text-decoration: underline;
+      }
+
       .empty {
         margin-top: 18pt;
         text-align: center;
@@ -270,7 +275,7 @@
                   {% if course.text_books %}
                     <ol>
                       {% for book in course.text_books %}
-                        <li>{{ book }}</li>
+                        <li>{{ book | linkify }}</li>
                       {% endfor %}
                     </ol>
                   {% else %}
@@ -284,7 +289,7 @@
                   <td>
                     <ol>
                       {% for book in course.reference_books %}
-                        <li>{{ book }}</li>
+                        <li>{{ book | linkify }}</li>
                       {% endfor %}
                     </ol>
                   </td>

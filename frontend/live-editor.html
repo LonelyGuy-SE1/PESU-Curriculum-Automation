@@ -47,12 +47,18 @@
       a {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         padding: 0 12px;
         text-decoration: none;
         cursor: pointer;
       }
 
-      .save {
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .primary {
         background: #00377b;
         color: #fff;
         border-color: #00377b;
@@ -66,40 +72,236 @@
 
       .workspace {
         display: grid;
-        grid-template-columns: minmax(360px, 1fr) minmax(420px, 1fr);
+        grid-template-columns: minmax(0, 1fr) 390px;
         gap: 12px;
         height: calc(100dvh - 52px);
         padding: 12px;
       }
 
-      textarea,
-      iframe {
-        width: 100%;
-        height: 100%;
+      .preview-pane,
+      .side-pane {
+        min-height: 0;
         border: 1px solid #d1d5db;
         background: #fff;
       }
 
-      textarea {
-        padding: 12px;
-        resize: none;
-        color: #111827;
-        font: 13px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+      .preview-pane {
+        position: relative;
       }
 
       iframe {
         display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
       }
 
-      @media (max-width: 900px) {
+      .loading {
+        position: absolute;
+        inset: 0;
+        display: none;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.82);
+        color: #00377b;
+        font-weight: 700;
+      }
+
+      .loading.active {
+        display: grid;
+      }
+
+      .side-pane {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        min-width: 0;
+      }
+
+      .tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border-bottom: 1px solid #d1d5db;
+      }
+
+      .tab {
+        width: 100%;
+        border: 0;
+        border-radius: 0;
+        margin: 0;
+        color: #00377b;
+        font-weight: 700;
+      }
+
+      .tab.active {
+        background: #00377b;
+        color: #fff;
+      }
+
+      .panel {
+        display: none;
+        min-height: 0;
+      }
+
+      .panel.active {
+        display: grid;
+      }
+
+      .chat-panel {
+        grid-template-rows: 1fr auto;
+      }
+
+      .chat-log {
+        min-height: 0;
+        overflow: auto;
+        padding: 12px;
+        background: #f8fafc;
+      }
+
+      .message {
+        max-width: 92%;
+        margin-bottom: 10px;
+        padding: 9px 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: #fff;
+        color: #111827;
+        font-size: 14px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+      }
+
+      .message.user {
+        margin-left: auto;
+        background: #eaf2ff;
+        border-color: #b9d1f5;
+      }
+
+      .message-time {
+        margin-top: 4px;
+        color: #6b7280;
+        font-size: 11px;
+        white-space: normal;
+      }
+
+      .attachments {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .attachment {
+        display: grid;
+        grid-template-columns: 42px 1fr auto;
+        align-items: center;
+        gap: 8px;
+        padding: 6px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        background: #fff;
+        font-size: 12px;
+      }
+
+      .attachment img {
+        width: 42px;
+        height: 42px;
+        object-fit: cover;
+        border: 1px solid #d1d5db;
+      }
+
+      .attachment-icon {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        border: 1px solid #d1d5db;
+        color: #00377b;
+        font-weight: 700;
+      }
+
+      .attachment-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .attachment-meta {
+        color: #6b7280;
+        font-size: 11px;
+      }
+
+      .attachment-remove {
+        height: 26px;
+        padding: 0 8px;
+      }
+
+      .composer {
+        display: grid;
+        gap: 8px;
+        padding: 10px;
+        border-top: 1px solid #d1d5db;
+        background: #fff;
+      }
+
+      .composer textarea,
+      .fields-panel textarea {
+        width: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        color: #111827;
+        font: 13px/1.45 Arial, sans-serif;
+      }
+
+      .composer textarea {
+        min-height: 84px;
+        resize: vertical;
+        padding: 9px;
+      }
+
+      .composer-actions {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .fields-panel {
+        grid-template-rows: 1fr auto;
+      }
+
+      .fields-panel textarea {
+        min-height: 0;
+        resize: none;
+        border: 0;
+        border-radius: 0;
+        padding: 12px;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
+
+      .field-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        padding: 10px;
+        border-top: 1px solid #d1d5db;
+      }
+
+      @media (max-width: 980px) {
+        .toolbar {
+          flex-wrap: wrap;
+        }
+
+        #status {
+          width: 100%;
+          margin-left: 0;
+        }
+
         .workspace {
           grid-template-columns: 1fr;
           height: auto;
         }
 
-        textarea,
-        iframe {
-          height: 70dvh;
+        .preview-pane,
+        .side-pane {
+          height: 72dvh;
         }
       }
     </style>
@@ -117,23 +319,67 @@
         <option value="8">Semester 8</option>
       </select>
       <select id="course" aria-label="Course"></select>
-      <button class="save" id="save" type="button">Save</button>
-      <a id="preview" target="_blank" rel="noreferrer">Preview</a>
+      <a id="preview" target="_blank" rel="noreferrer">Open</a>
       <span id="status"></span>
     </div>
+
     <main class="workspace">
-      <textarea id="editor" spellcheck="false"></textarea>
-      <iframe id="pdf" title="Course preview"></iframe>
+      <section class="preview-pane" aria-label="Course preview">
+        <iframe id="viewer" title="Course preview"></iframe>
+        <div class="loading" id="loading">Loading...</div>
+      </section>
+
+      <aside class="side-pane">
+        <div class="tabs" role="tablist" aria-label="Editor tools">
+          <button class="tab active" id="chat-tab" type="button" role="tab" aria-selected="true" aria-controls="chat-panel">Chat</button>
+          <button class="tab" id="fields-tab" type="button" role="tab" aria-selected="false" aria-controls="fields-panel">Fields</button>
+        </div>
+
+        <section class="panel chat-panel active" id="chat-panel" role="tabpanel" aria-labelledby="chat-tab">
+          <div class="chat-log" id="chat-log" aria-live="polite"></div>
+          <div class="composer">
+            <div class="attachments" id="draft-attachments"></div>
+            <textarea id="message" aria-label="Message"></textarea>
+            <div class="composer-actions">
+              <button id="attach" type="button">Attach</button>
+              <input id="files" type="file" multiple accept="image/*,.pdf,.txt,.doc,.docx" hidden />
+              <button id="clear-chat" type="button">Clear</button>
+              <button class="primary" id="send" type="button">Send</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel fields-panel" id="fields-panel" role="tabpanel" aria-labelledby="fields-tab">
+          <textarea id="editor" spellcheck="false" aria-label="Course fields"></textarea>
+          <div class="field-actions">
+            <button class="primary" id="save" type="button">Save</button>
+          </div>
+        </section>
+      </aside>
     </main>
 
     <script>
       const semester = document.getElementById("semester");
       const course = document.getElementById("course");
-      const save = document.getElementById("save");
       const preview = document.getElementById("preview");
-      const editor = document.getElementById("editor");
-      const pdf = document.getElementById("pdf");
+      const viewer = document.getElementById("viewer");
+      const loading = document.getElementById("loading");
       const statusText = document.getElementById("status");
+      const chatTab = document.getElementById("chat-tab");
+      const fieldsTab = document.getElementById("fields-tab");
+      const chatPanel = document.getElementById("chat-panel");
+      const fieldsPanel = document.getElementById("fields-panel");
+      const chatLog = document.getElementById("chat-log");
+      const message = document.getElementById("message");
+      const attach = document.getElementById("attach");
+      const files = document.getElementById("files");
+      const draftAttachments = document.getElementById("draft-attachments");
+      const clearChat = document.getElementById("clear-chat");
+      const send = document.getElementById("send");
+      const editor = document.getElementById("editor");
+      const save = document.getElementById("save");
+      let activeCourseId = "";
+      let queuedFiles = [];
 
       async function courseIds(sem) {
         const response = await fetch(`/api/preview/semester/${sem}/courses`);
@@ -149,25 +395,158 @@
         return "1";
       }
 
+      function setTab(name) {
+        const chat = name === "chat";
+        chatTab.classList.toggle("active", chat);
+        fieldsTab.classList.toggle("active", !chat);
+        chatTab.setAttribute("aria-selected", String(chat));
+        fieldsTab.setAttribute("aria-selected", String(!chat));
+        chatPanel.classList.toggle("active", chat);
+        fieldsPanel.classList.toggle("active", !chat);
+      }
+
+      function chatKey() {
+        return `pesu-live-editor-chat:${activeCourseId}`;
+      }
+
+      function loadMessages() {
+        if (!activeCourseId) return [];
+        try {
+          return JSON.parse(localStorage.getItem(chatKey()) || "[]");
+        } catch {
+          return [];
+        }
+      }
+
+      function saveMessages(messages) {
+        if (activeCourseId) localStorage.setItem(chatKey(), JSON.stringify(messages));
+      }
+
+      function formatSize(bytes) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      }
+
+      function attachmentNode(file, index, removable) {
+        const item = document.createElement("div");
+        item.className = "attachment";
+        const visual = file.preview ? document.createElement("img") : document.createElement("div");
+        if (file.preview) {
+          visual.src = file.preview;
+          visual.alt = "";
+        } else {
+          visual.className = "attachment-icon";
+          visual.textContent = "FILE";
+        }
+        const text = document.createElement("div");
+        const name = document.createElement("div");
+        name.className = "attachment-name";
+        name.textContent = file.name;
+        const meta = document.createElement("div");
+        meta.className = "attachment-meta";
+        meta.textContent = `${file.type || "file"} - ${formatSize(file.size || 0)}`;
+        text.append(name, meta);
+        item.append(visual, text);
+        if (removable) {
+          const remove = document.createElement("button");
+          remove.className = "attachment-remove";
+          remove.type = "button";
+          remove.textContent = "Remove";
+          remove.addEventListener("click", () => {
+            queuedFiles.splice(index, 1);
+            renderDraftAttachments();
+          });
+          item.appendChild(remove);
+        } else {
+          item.appendChild(document.createElement("span"));
+        }
+        return item;
+      }
+
+      function renderDraftAttachments() {
+        draftAttachments.replaceChildren(...queuedFiles.map((file, index) => attachmentNode(file, index, true)));
+      }
+
+      function renderMessages() {
+        const messages = loadMessages();
+        chatLog.replaceChildren();
+        messages.forEach((item) => {
+          const bubble = document.createElement("div");
+          bubble.className = `message ${item.role}`;
+          if (item.content) bubble.appendChild(document.createTextNode(item.content));
+          if (item.attachments?.length) {
+            const list = document.createElement("div");
+            list.className = "attachments";
+            item.attachments.forEach((file) => list.appendChild(attachmentNode(file, 0, false)));
+            bubble.appendChild(list);
+          }
+          const time = document.createElement("div");
+          time.className = "message-time";
+          time.textContent = new Date(item.created_at).toLocaleString();
+          bubble.appendChild(time);
+          chatLog.appendChild(bubble);
+        });
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }
+
+      function filePreview(file) {
+        return new Promise((resolve) => {
+          if (!file.type.startsWith("image/") || file.size > 900000) {
+            resolve("");
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => resolve("");
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function queueFiles(fileList) {
+        const next = await Promise.all(
+          Array.from(fileList).map(async (file) => ({
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            preview: await filePreview(file),
+          })),
+        );
+        queuedFiles = queuedFiles.concat(next);
+        renderDraftAttachments();
+        files.value = "";
+      }
+
       async function loadCourse(id) {
+        activeCourseId = String(id);
+        loading.classList.add("active");
         const response = await fetch(`/api/refined/${id}`);
         if (!response.ok) throw new Error("Unable to load course");
         const row = await response.json();
         editor.value = JSON.stringify(row.fields || {}, null, 2);
-        pdf.src = `/api/preview/course/${id}`;
+        viewer.src = `/api/preview/course/${id}`;
         preview.href = `/api/preview/course/${id}`;
-        statusText.textContent = row.fields?.course_title || `Course ${id}`;
+        const title = row.fields?.course_title || `Course ${id}`;
+        statusText.textContent = title;
+        const selected = course.querySelector(`option[value="${id}"]`);
+        if (selected) selected.textContent = title;
+        queuedFiles = [];
+        renderDraftAttachments();
+        renderMessages();
       }
 
       async function loadSemester(sem) {
         semester.value = sem;
-        course.innerHTML = "";
+        course.replaceChildren();
         editor.value = "";
-        pdf.removeAttribute("src");
+        viewer.removeAttribute("src");
+        preview.removeAttribute("href");
+        loading.classList.add("active");
         statusText.textContent = "Loading...";
 
         const ids = await courseIds(sem);
         if (!ids.length) {
+          loading.classList.remove("active");
           statusText.textContent = `No refined courses found for Semester ${sem}.`;
           return;
         }
@@ -181,8 +560,36 @@
         await loadCourse(ids[0]);
       }
 
+      chatTab.addEventListener("click", () => setTab("chat"));
+      fieldsTab.addEventListener("click", () => setTab("fields"));
+      viewer.addEventListener("load", () => loading.classList.remove("active"));
       semester.addEventListener("change", () => loadSemester(semester.value));
       course.addEventListener("change", () => loadCourse(course.value));
+      attach.addEventListener("click", () => files.click());
+      files.addEventListener("change", () => queueFiles(files.files));
+
+      send.addEventListener("click", () => {
+        const content = message.value.trim();
+        if (!content && !queuedFiles.length) return;
+        const messages = loadMessages();
+        messages.push({
+          role: "user",
+          content,
+          attachments: queuedFiles,
+          created_at: new Date().toISOString(),
+        });
+        saveMessages(messages);
+        message.value = "";
+        queuedFiles = [];
+        renderDraftAttachments();
+        renderMessages();
+      });
+
+      clearChat.addEventListener("click", () => {
+        if (!activeCourseId) return;
+        localStorage.removeItem(chatKey());
+        renderMessages();
+      });
 
       save.addEventListener("click", async () => {
         statusText.textContent = "Saving...";
@@ -197,13 +604,16 @@
           throw new Error(body.detail || "Save failed");
         }
         await loadCourse(course.value);
+        setTab("chat");
       });
 
       window.addEventListener("error", (event) => {
+        loading.classList.remove("active");
         statusText.textContent = event.message;
       });
 
       firstAvailableSemester().then(loadSemester).catch(() => {
+        loading.classList.remove("active");
         statusText.textContent = "Backend unavailable.";
       });
     </script>
