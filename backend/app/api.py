@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from weasyprint import HTML
 
 from app.preview import build_course_preview
+from app.services.diffing import diff_course, merge_fields, validate_draft
 from app.services.refinement import refine
 from app.supabase import supabase
 
@@ -97,6 +98,65 @@ class CourseSubmission(BaseModel):
     @classmethod
     def strip(cls, v):
         return v.strip() if isinstance(v, str) else v
+
+
+class AgentDraftPayload(BaseModel):
+    refined_id: int
+    fields: dict
+    reason: str = ""
+
+
+class AgentDocumentCoursePayload(BaseModel):
+    refined_id: int
+    fields: dict
+
+
+class AgentDocumentDraftPayload(BaseModel):
+    courses: list[AgentDocumentCoursePayload] = Field(min_length=1)
+    reason: str = ""
+    curriculum_version_id: int | None = None
+    uploaded_document_id: str = ""
+
+
+def refined_course(refined_id: int) -> dict:
+    result = supabase.table("refined_submissions").select("*").eq("id", refined_id).single().execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Refined submission not found")
+    return build_course_preview(attach_submissions([result.data])[0])
+
+
+def update_refined_fields(refined_id: int, fields: dict) -> dict | None:
+    update = {key: fields[key] for key in REFINED_FIELDS if key in fields}
+    for key in ("semester", "lecture_hours", "tutorial_hours", "practical_hours", "self_study", "credits"):
+        if key in update:
+            update[key] = int(update[key] or 0)
+    result = supabase.table("refined_submissions").update(update).eq("id", refined_id).execute()
+    return result.data[0] if result.data else None
+
+
+def draft_record(refined_id: int, fields: dict, reason: str = "", document_draft_id: int | None = None) -> dict:
+    base = refined_course(refined_id)
+    proposed = merge_fields(base, fields)
+    summary = diff_course(base, proposed)
+    issues = validate_draft(base, proposed)
+    summary["validation_issues"] = issues
+    return {
+        "refined_id": refined_id,
+        "document_draft_id": document_draft_id,
+        "base_refined_json": base,
+        "proposed_json": proposed,
+        "json_patch": summary.pop("json_patch"),
+        "diff_summary": summary,
+        "change_reason": reason.strip(),
+        "status": "blocked" if issues else "proposed",
+    }
+
+
+def load_agent_draft(draft_id: int) -> dict:
+    result = supabase.table("agent_drafts").select("*").eq("id", draft_id).single().execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Agent draft not found")
+    return result.data
 
 
 def refine_later(submission_id: int) -> None:
@@ -189,9 +249,119 @@ def update_refined(refined_id: int, payload: dict):
     fields = payload.get("fields")
     if not isinstance(fields, dict):
         raise HTTPException(status_code=400, detail="fields is required")
-    update = {key: fields[key] for key in REFINED_FIELDS if key in fields}
-    for key in ("semester", "lecture_hours", "tutorial_hours", "practical_hours", "self_study", "credits"):
-        if key in update:
-            update[key] = int(update[key] or 0)
-    result = supabase.table("refined_submissions").update(update).eq("id", refined_id).execute()
-    return {"message": "Updated", "data": result.data[0] if result.data else None}
+    return {"message": "Updated", "data": update_refined_fields(refined_id, fields)}
+
+
+@router.post("/agent/diff")
+def compare_course(payload: dict):
+    current = payload.get("current")
+    proposed = payload.get("proposed")
+    if not isinstance(current, dict) or not isinstance(proposed, dict):
+        raise HTTPException(status_code=400, detail="current and proposed are required")
+    return diff_course(current, proposed)
+
+
+@router.post("/agent/drafts")
+def create_agent_draft(payload: AgentDraftPayload):
+    record = draft_record(payload.refined_id, payload.fields, payload.reason)
+    result = supabase.table("agent_drafts").insert(record).execute()
+    draft = result.data[0]
+    return {"message": "Draft created", "draft": draft}
+
+
+@router.get("/agent/drafts/{draft_id}")
+def get_agent_draft(draft_id: int):
+    return {"draft": load_agent_draft(draft_id)}
+
+
+@router.get("/agent/drafts/{draft_id}/preview")
+def preview_agent_draft(draft_id: int):
+    draft = load_agent_draft(draft_id)
+    html = templates.get_template("jinja_sample.html").render(
+        course=draft["proposed_json"],
+        curriculum_year="2025-2026",
+        asset_root="/",
+    )
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
+@router.post("/agent/drafts/{draft_id}/apply")
+def apply_agent_draft(draft_id: int):
+    draft = load_agent_draft(draft_id)
+    summary = draft.get("diff_summary") or {}
+    if draft.get("status") != "proposed":
+        raise HTTPException(status_code=400, detail="Only proposed drafts can be applied")
+    if summary.get("protected_changes"):
+        raise HTTPException(status_code=400, detail="Draft changes deterministic fields")
+    supabase.table("course_revision_history").insert(
+        {
+            "refined_id": draft["refined_id"],
+            "agent_draft_id": draft_id,
+            "previous_json": draft["base_refined_json"],
+            "next_json": draft["proposed_json"],
+            "json_patch": draft["json_patch"],
+            "diff_summary": summary,
+            "change_reason": draft.get("change_reason") or "",
+        }
+    ).execute()
+    data = update_refined_fields(int(draft["refined_id"]), draft["proposed_json"])
+    supabase.table("agent_drafts").update({"status": "applied"}).eq("id", draft_id).execute()
+    return {"message": "Draft applied", "data": data}
+
+
+@router.post("/agent/document-drafts")
+def create_agent_document_draft(payload: AgentDocumentDraftPayload):
+    records = [draft_record(course.refined_id, course.fields, payload.reason) for course in payload.courses]
+    summaries = [record["diff_summary"] for record in records]
+    document_summary = {
+        "courses_changed": len(records),
+        "courses_with_removed_topics": sum(1 for summary in summaries if summary.get("topics_removed")),
+        "courses_with_protected_changes": sum(1 for summary in summaries if summary.get("protected_changes")),
+        "max_syllabus_change_percent": max((summary.get("syllabus_change_percent") or 0 for summary in summaries), default=0),
+    }
+    status = "blocked" if document_summary["courses_with_protected_changes"] else "proposed"
+    document = (
+        supabase.table("agent_document_drafts")
+        .insert(
+            {
+                "curriculum_version_id": payload.curriculum_version_id,
+                "uploaded_document_id": payload.uploaded_document_id.strip(),
+                "diff_summary": document_summary,
+                "change_reason": payload.reason.strip(),
+                "status": status,
+            }
+        )
+        .execute()
+        .data[0]
+    )
+    for record in records:
+        record["document_draft_id"] = document["id"]
+    drafts = supabase.table("agent_drafts").insert(records).execute().data
+    return {"message": "Document draft created", "document_draft": document, "drafts": drafts}
+
+
+@router.get("/agent/document-drafts/{document_draft_id}")
+def get_agent_document_draft(document_draft_id: int):
+    document = supabase.table("agent_document_drafts").select("*").eq("id", document_draft_id).single().execute().data
+    if not document:
+        raise HTTPException(status_code=404, detail="Document draft not found")
+    drafts = supabase.table("agent_drafts").select("*").eq("document_draft_id", document_draft_id).order("id").execute().data
+    return {"document_draft": document, "drafts": drafts}
+
+
+@router.get("/agent/document-drafts/{document_draft_id}/preview")
+def preview_agent_document_draft(document_draft_id: int):
+    drafts = supabase.table("agent_drafts").select("*").eq("document_draft_id", document_draft_id).execute().data
+    if not drafts:
+        raise HTTPException(status_code=404, detail="Document draft not found")
+    courses = sorted(
+        (draft["proposed_json"] for draft in drafts),
+        key=lambda course: (int(course.get("semester") or 0), str(course.get("course_code") or ""), str(course.get("course_title") or "")),
+    )
+    html = templates.get_template("jinja_sample.html").render(
+        courses=courses,
+        semester="",
+        curriculum_year="2025-2026",
+        asset_root="/",
+    )
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})

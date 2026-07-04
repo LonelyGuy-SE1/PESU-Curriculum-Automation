@@ -28,6 +28,7 @@
       }
 
       select,
+      input,
       button,
       a {
         height: 34px;
@@ -40,6 +41,11 @@
 
       select {
         min-width: 140px;
+        padding: 0 8px;
+      }
+
+      input {
+        min-width: 0;
         padding: 0 8px;
       }
 
@@ -118,7 +124,7 @@
 
       .tabs {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1fr;
         border-bottom: 1px solid #d1d5db;
       }
 
@@ -267,6 +273,95 @@
         grid-template-rows: 1fr auto;
       }
 
+      .review-panel {
+        grid-template-rows: auto 1fr auto;
+        min-height: 0;
+      }
+
+      .review-summary {
+        display: grid;
+        gap: 6px;
+        padding: 12px;
+        border-bottom: 1px solid #d1d5db;
+        font-size: 13px;
+      }
+
+      .review-summary strong {
+        color: #00377b;
+      }
+
+      .document-draft {
+        display: grid;
+        gap: 8px;
+        padding: 10px;
+        border-bottom: 1px solid #d1d5db;
+      }
+
+      .draft-loader {
+        display: grid;
+        grid-template-columns: minmax(96px, 1fr) 72px;
+        gap: 8px;
+      }
+
+      .diff-view {
+        min-height: 0;
+        overflow: auto;
+        margin: 0;
+        background: #fff;
+        color: #24292f;
+        font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+        border-top: 1px solid #d1d5db;
+        border-bottom: 1px solid #d1d5db;
+      }
+
+      .diff-empty {
+        padding: 12px;
+        color: #6b7280;
+      }
+
+      .diff-row {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr);
+        min-height: 25px;
+        border-bottom: 1px solid rgba(31, 35, 40, 0.06);
+      }
+
+      .diff-row.added {
+        background: #dafbe1;
+      }
+
+      .diff-row.removed {
+        background: #ffebe9;
+      }
+
+      .diff-row.meta,
+      .diff-row.header,
+      .diff-row.title {
+        background: #f6f8fa;
+        color: #57606a;
+        font-weight: 700;
+      }
+
+      .diff-row.header {
+        color: #0969da;
+      }
+
+      .diff-sign {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 3px;
+        color: #57606a;
+        user-select: none;
+        border-right: 1px solid rgba(31, 35, 40, 0.08);
+      }
+
+      .diff-code {
+        padding: 3px 8px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
       .fields-panel textarea {
         min-height: 0;
         resize: none;
@@ -319,6 +414,10 @@
         <option value="8">Semester 8</option>
       </select>
       <select id="course" aria-label="Course"></select>
+      <select id="view-mode" aria-label="Preview mode">
+        <option value="course">Course Preview</option>
+        <option value="document">Full Document</option>
+      </select>
       <a id="preview" target="_blank" rel="noreferrer">Open</a>
       <span id="status"></span>
     </div>
@@ -333,6 +432,7 @@
         <div class="tabs" role="tablist" aria-label="Editor tools">
           <button class="tab active" id="chat-tab" type="button" role="tab" aria-selected="true" aria-controls="chat-panel">Chat</button>
           <button class="tab" id="fields-tab" type="button" role="tab" aria-selected="false" aria-controls="fields-panel">Fields</button>
+          <button class="tab" id="review-tab" type="button" role="tab" aria-selected="false" aria-controls="review-panel">Review</button>
         </div>
 
         <section class="panel chat-panel active" id="chat-panel" role="tabpanel" aria-labelledby="chat-tab">
@@ -352,7 +452,27 @@
         <section class="panel fields-panel" id="fields-panel" role="tabpanel" aria-labelledby="fields-tab">
           <textarea id="editor" spellcheck="false" aria-label="Course fields"></textarea>
           <div class="field-actions">
+            <button id="draft" type="button">Create Draft</button>
             <button class="primary" id="save" type="button">Save</button>
+          </div>
+        </section>
+
+        <section class="panel review-panel" id="review-panel" role="tabpanel" aria-labelledby="review-tab">
+          <div class="document-draft">
+            <div class="draft-loader">
+              <input id="course-draft-id" type="number" min="1" placeholder="Course draft ID" aria-label="Course draft ID" />
+              <button id="load-course-draft" type="button">Load</button>
+            </div>
+            <div class="draft-loader">
+              <input id="document-draft-id" type="number" min="1" placeholder="Document draft ID" aria-label="Document draft ID" />
+              <button id="load-document-draft" type="button">Load</button>
+            </div>
+          </div>
+          <div class="review-summary" id="review-summary"></div>
+          <div class="diff-view" id="diff-view"></div>
+          <div class="field-actions">
+            <button id="preview-draft" type="button">Preview Draft</button>
+            <button class="primary" id="apply-draft" type="button">Apply Draft</button>
           </div>
         </section>
       </aside>
@@ -361,14 +481,17 @@
     <script>
       const semester = document.getElementById("semester");
       const course = document.getElementById("course");
+      const viewMode = document.getElementById("view-mode");
       const preview = document.getElementById("preview");
       const viewer = document.getElementById("viewer");
       const loading = document.getElementById("loading");
       const statusText = document.getElementById("status");
       const chatTab = document.getElementById("chat-tab");
       const fieldsTab = document.getElementById("fields-tab");
+      const reviewTab = document.getElementById("review-tab");
       const chatPanel = document.getElementById("chat-panel");
       const fieldsPanel = document.getElementById("fields-panel");
+      const reviewPanel = document.getElementById("review-panel");
       const chatLog = document.getElementById("chat-log");
       const message = document.getElementById("message");
       const attach = document.getElementById("attach");
@@ -377,8 +500,18 @@
       const clearChat = document.getElementById("clear-chat");
       const send = document.getElementById("send");
       const editor = document.getElementById("editor");
+      const draft = document.getElementById("draft");
       const save = document.getElementById("save");
+      const courseDraftId = document.getElementById("course-draft-id");
+      const loadCourseDraft = document.getElementById("load-course-draft");
+      const documentDraftId = document.getElementById("document-draft-id");
+      const loadDocumentDraft = document.getElementById("load-document-draft");
+      const reviewSummary = document.getElementById("review-summary");
+      const diffView = document.getElementById("diff-view");
+      const previewDraft = document.getElementById("preview-draft");
+      const applyDraft = document.getElementById("apply-draft");
       let activeCourseId = "";
+      let activeDraftId = "";
       let queuedFiles = [];
 
       async function courseIds(sem) {
@@ -397,16 +530,21 @@
 
       function setTab(name) {
         const chat = name === "chat";
+        const fields = name === "fields";
+        const review = name === "review";
         chatTab.classList.toggle("active", chat);
-        fieldsTab.classList.toggle("active", !chat);
+        fieldsTab.classList.toggle("active", fields);
+        reviewTab.classList.toggle("active", review);
         chatTab.setAttribute("aria-selected", String(chat));
-        fieldsTab.setAttribute("aria-selected", String(!chat));
+        fieldsTab.setAttribute("aria-selected", String(fields));
+        reviewTab.setAttribute("aria-selected", String(review));
         chatPanel.classList.toggle("active", chat);
-        fieldsPanel.classList.toggle("active", !chat);
+        fieldsPanel.classList.toggle("active", fields);
+        reviewPanel.classList.toggle("active", review);
       }
 
       function chatKey() {
-        return `pesu-live-editor-chat:${activeCourseId}`;
+        return `pesu-live-editor-chat:${activeCourseId || "document"}`;
       }
 
       function loadMessages() {
@@ -490,6 +628,83 @@
         chatLog.scrollTop = chatLog.scrollHeight;
       }
 
+      function resetReview() {
+        activeDraftId = "";
+        reviewSummary.replaceChildren(document.createTextNode("No draft loaded."));
+        renderDiff("");
+        previewDraft.disabled = true;
+        applyDraft.disabled = true;
+      }
+
+      function renderDiff(text) {
+        diffView.replaceChildren();
+        if (!text) {
+          const empty = document.createElement("div");
+          empty.className = "diff-empty";
+          empty.textContent = "No diff loaded.";
+          diffView.appendChild(empty);
+          return;
+        }
+
+        text.split("\n").forEach((line) => {
+          let kind = "context";
+          let sign = "";
+          let code = line;
+
+          if (line.startsWith("Course draft ")) {
+            kind = "title";
+          } else if (line.startsWith("@@")) {
+            kind = "header";
+          } else if (line.startsWith("---") || line.startsWith("+++")) {
+            kind = "meta";
+          } else if (line.startsWith("-")) {
+            kind = "removed";
+            sign = "-";
+            code = line.slice(1).replace(/^ /, "");
+          } else if (line.startsWith("+")) {
+            kind = "added";
+            sign = "+";
+            code = line.slice(1).replace(/^ /, "");
+          }
+
+          const row = document.createElement("div");
+          row.className = `diff-row ${kind}`;
+          const signCell = document.createElement("div");
+          signCell.className = "diff-sign";
+          signCell.textContent = sign;
+          const codeCell = document.createElement("div");
+          codeCell.className = "diff-code";
+          codeCell.textContent = code;
+          row.append(signCell, codeCell);
+          diffView.appendChild(row);
+        });
+      }
+
+      function summaryLine(label, value) {
+        const line = document.createElement("div");
+        const strong = document.createElement("strong");
+        strong.textContent = `${label}: `;
+        line.append(strong, document.createTextNode(value));
+        return line;
+      }
+
+      function renderDraftReview(draftRow) {
+        const summary = draftRow.diff_summary || {};
+        activeDraftId = String(draftRow.id || "");
+        reviewSummary.replaceChildren(
+          summaryLine("Draft", activeDraftId || "unsaved"),
+          summaryLine("Status", draftRow.status || ""),
+          summaryLine("Change", `${summary.change_percent || 0}%`),
+          summaryLine("Syllabus change", `${summary.syllabus_change_percent || 0}%`),
+          summaryLine("Topics added", (summary.topics_added || []).join(", ") || "None"),
+          summaryLine("Topics removed", (summary.topics_removed || []).join(", ") || "None"),
+          summaryLine("Protected changes", (summary.protected_changes || []).join(", ") || "None"),
+        );
+        renderDiff(summary.unified_diff || "No changes.");
+        previewDraft.disabled = !activeDraftId;
+        applyDraft.disabled = draftRow.status !== "proposed" || Boolean((summary.protected_changes || []).length);
+      }
+
       function filePreview(file) {
         return new Promise((resolve) => {
           if (!file.type.startsWith("image/") || file.size > 900000) {
@@ -519,6 +734,7 @@
 
       async function loadCourse(id) {
         activeCourseId = String(id);
+        resetReview();
         loading.classList.add("active");
         const response = await fetch(`/api/refined/${id}`);
         if (!response.ok) throw new Error("Unable to load course");
@@ -532,6 +748,20 @@
         if (selected) selected.textContent = title;
         queuedFiles = [];
         renderDraftAttachments();
+        renderMessages();
+      }
+
+      async function loadDocumentPreview() {
+        activeCourseId = "";
+        activeDraftId = "";
+        course.disabled = true;
+        semester.disabled = true;
+        editor.value = "";
+        resetReview();
+        loading.classList.add("active");
+        viewer.src = "/api/preview/pdf";
+        preview.href = "/api/preview/pdf";
+        statusText.textContent = "Full Document";
         renderMessages();
       }
 
@@ -562,9 +792,19 @@
 
       chatTab.addEventListener("click", () => setTab("chat"));
       fieldsTab.addEventListener("click", () => setTab("fields"));
+      reviewTab.addEventListener("click", () => setTab("review"));
       viewer.addEventListener("load", () => loading.classList.remove("active"));
       semester.addEventListener("change", () => loadSemester(semester.value));
       course.addEventListener("change", () => loadCourse(course.value));
+      viewMode.addEventListener("change", async () => {
+        if (viewMode.value === "document") {
+          await loadDocumentPreview();
+          return;
+        }
+        course.disabled = false;
+        semester.disabled = false;
+        await loadSemester(semester.value);
+      });
       attach.addEventListener("click", () => files.click());
       files.addEventListener("change", () => queueFiles(files.files));
 
@@ -589,6 +829,92 @@
         if (!activeCourseId) return;
         localStorage.removeItem(chatKey());
         renderMessages();
+      });
+
+      draft.addEventListener("click", async () => {
+        if (!course.value || viewMode.value !== "course") return;
+        statusText.textContent = "Creating draft...";
+        const parsed = JSON.parse(editor.value);
+        const response = await fetch("/api/agent/drafts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refined_id: Number(course.value), fields: parsed, reason: "Live editor draft" }),
+        });
+        if (!response.ok) {
+          const body = await response.json();
+          throw new Error(body.detail || "Draft failed");
+        }
+        const body = await response.json();
+        renderDraftReview(body.draft);
+        viewer.src = `/api/agent/drafts/${body.draft.id}/preview`;
+        preview.href = `/api/agent/drafts/${body.draft.id}/preview`;
+        statusText.textContent = "Draft ready for review.";
+        setTab("review");
+      });
+
+      previewDraft.addEventListener("click", () => {
+        if (!activeDraftId) return;
+        viewer.src = `/api/agent/drafts/${activeDraftId}/preview`;
+        preview.href = `/api/agent/drafts/${activeDraftId}/preview`;
+      });
+
+      applyDraft.addEventListener("click", async () => {
+        if (!activeDraftId) return;
+        statusText.textContent = "Applying draft...";
+        const response = await fetch(`/api/agent/drafts/${activeDraftId}/apply`, { method: "POST" });
+        if (!response.ok) {
+          const body = await response.json();
+          throw new Error(body.detail || "Apply failed");
+        }
+        await loadCourse(course.value);
+        statusText.textContent = "Draft applied.";
+      });
+
+      loadDocumentDraft.addEventListener("click", async () => {
+        const id = documentDraftId.value.trim();
+        if (!id) return;
+        statusText.textContent = "Loading document draft...";
+        const response = await fetch(`/api/agent/document-drafts/${id}`);
+        if (!response.ok) {
+          const body = await response.json();
+          throw new Error(body.detail || "Document draft not found");
+        }
+        const body = await response.json();
+        const summary = body.document_draft.diff_summary || {};
+        activeDraftId = "";
+        reviewSummary.replaceChildren(
+          summaryLine("Document draft", id),
+          summaryLine("Status", body.document_draft.status || ""),
+          summaryLine("Courses changed", String(summary.courses_changed || 0)),
+          summaryLine("Removed-topic courses", String(summary.courses_with_removed_topics || 0)),
+          summaryLine("Protected-change courses", String(summary.courses_with_protected_changes || 0)),
+          summaryLine("Max syllabus change", `${summary.max_syllabus_change_percent || 0}%`),
+        );
+        renderDiff(
+          (body.drafts || [])
+            .map((item) => `Course draft ${item.id}\n${item.diff_summary?.unified_diff || ""}`)
+            .join("\n\n"),
+        );
+        previewDraft.disabled = true;
+        applyDraft.disabled = true;
+        viewer.src = `/api/agent/document-drafts/${id}/preview`;
+        preview.href = `/api/agent/document-drafts/${id}/preview`;
+      });
+
+      loadCourseDraft.addEventListener("click", async () => {
+        const id = courseDraftId.value.trim();
+        if (!id) return;
+        statusText.textContent = "Loading course draft...";
+        const response = await fetch(`/api/agent/drafts/${id}`);
+        if (!response.ok) {
+          const body = await response.json();
+          throw new Error(body.detail || "Course draft not found");
+        }
+        const body = await response.json();
+        renderDraftReview(body.draft);
+        viewer.src = `/api/agent/drafts/${id}/preview`;
+        preview.href = `/api/agent/drafts/${id}/preview`;
+        statusText.textContent = "Course draft loaded.";
       });
 
       save.addEventListener("click", async () => {

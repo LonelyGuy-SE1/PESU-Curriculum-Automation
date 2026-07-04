@@ -16,11 +16,12 @@ Keep these values in `.env` only. Do not commit credentials or paste them into f
 
 - `submissions` stores the raw form input.
 - `refined_submissions` stores the template-ready refined fields used by the preview template.
-- The finalized table is not implemented in this repo yet. Decide its schema before adding code that writes final approved curriculum data.
+- `agent_drafts` and `agent_document_drafts` store proposed AI changes before human approval.
+- `finalized_submissions` and `curriculum_versions` store approved curriculum snapshots.
 
-## Refined Table Schema
+## Schema
 
-Run `docs/refined-submissions-schema.sql` in the Supabase SQL editor when rebuilding the refined table. It backs up the current table as `refined_submissions_backup`, creates the template-ready table, and backfills current refined rows.
+Run `docs/schema.sql` in the Supabase SQL editor to create the public project tables. This file is schema-only: it does not rename tables, backfill data, or insert test rows.
 
 ## Read Data From Code
 
