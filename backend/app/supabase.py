@@ -5,8 +5,8 @@ import httpx
 
 load_dotenv("../.env")
 
-url=environ["SUPABASE_URL"]
-key=environ["SUPABASE_KEY"]
+url = environ["SUPABASE_URL"].strip()
+key = environ["SUPABASE_KEY"].strip()
 supabase=create_client(
     supabase_url=url,
     supabase_key=key,

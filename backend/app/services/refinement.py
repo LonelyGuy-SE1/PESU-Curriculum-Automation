@@ -486,7 +486,9 @@ def build_refined_payload(sub: dict, out: dict, prior_courses: list[str] | None 
 
 
 def refine(submission_id: int):
-    sub = supabase.table("submissions").select("*").eq("id", submission_id).single().execute().data
+    sub = supabase.table("submissions").select("*").eq("id", submission_id).maybe_single().execute().data
+    if not sub:
+        raise LookupError("Submission not found")
     det = compute_hours(sub["credit_category"])
     ctype = compute_course_type(sub["credit_category"])
     total_unit_hours = det["lecture_hours"] * 14

@@ -19,6 +19,18 @@ def test_stream_token_reads_content_delta(monkeypatch):
     assert openrouter._stream_token(line) == "hello"
 
 
+def test_env_values_are_stripped(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_URL", "https://openrouter.test\n")
+    monkeypatch.setenv("OPENROUTER_API_KEY", " test-key\n")
+    monkeypatch.setenv("OPENROUTER_MODEL", " test-model\n")
+    sys.modules.pop("app.services.openrouter", None)
+    openrouter = importlib.import_module("app.services.openrouter")
+
+    assert openrouter.URL == "https://openrouter.test"
+    assert openrouter.KEY == "test-key"
+    assert openrouter.MODEL == "test-model"
+
+
 def test_stream_token_ignores_comments_and_done(monkeypatch):
     openrouter = load_openrouter(monkeypatch)
 

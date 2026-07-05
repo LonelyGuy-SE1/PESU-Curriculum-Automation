@@ -44,7 +44,7 @@ def ordered_courses(rows: list[dict]) -> list[dict]:
 
 
 def refined_course(refined_id: int) -> dict:
-    row = supabase.table("refined_submissions").select("*").eq("id", refined_id).single().execute().data
+    row = supabase.table("refined_submissions").select("*").eq("id", refined_id).maybe_single().execute().data
     if not row:
         raise LookupError("Refined submission not found")
     return build_course_preview(attach_submissions([row])[0])
@@ -78,14 +78,14 @@ def draft_record(refined_id: int, fields: dict, reason: str = "", document_draft
 
 
 def load_agent_draft(draft_id: int) -> dict:
-    draft = supabase.table("agent_drafts").select("*").eq("id", draft_id).single().execute().data
+    draft = supabase.table("agent_drafts").select("*").eq("id", draft_id).maybe_single().execute().data
     if not draft:
         raise LookupError("Agent draft not found")
     return draft
 
 
 def load_document_draft(document_draft_id: int) -> dict:
-    document = supabase.table("agent_document_drafts").select("*").eq("id", document_draft_id).single().execute().data
+    document = supabase.table("agent_document_drafts").select("*").eq("id", document_draft_id).maybe_single().execute().data
     if not document:
         raise LookupError("Document draft not found")
     drafts = supabase.table("agent_drafts").select("*").eq("document_draft_id", document_draft_id).order("id").execute().data

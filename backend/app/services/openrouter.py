@@ -3,13 +3,13 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from httpx import Client, HTTPStatusError
+from httpx import Client, HTTPError, HTTPStatusError
 
 load_dotenv("../.env")
 
-URL = os.environ["OPENROUTER_URL"]
-KEY = os.environ["OPENROUTER_API_KEY"]
-MODEL = os.environ["OPENROUTER_MODEL"]
+URL = os.environ["OPENROUTER_URL"].strip()
+KEY = os.environ["OPENROUTER_API_KEY"].strip()
+MODEL = os.environ["OPENROUTER_MODEL"].strip()
 logger = logging.getLogger(__name__)
 
 
@@ -51,7 +51,7 @@ def stream_chat(system: str, messages: list[dict]):
         for token in _stream_chat(chat_messages):
             emitted = True
             yield token
-    except (HTTPStatusError, json.JSONDecodeError) as exc:
+    except (HTTPError, json.JSONDecodeError) as exc:
         _log_stream_fallback(exc)
 
     if emitted:
@@ -92,7 +92,7 @@ def _log_stream_fallback(exc: Exception) -> None:
             response.text[:500],
         )
         return
-    logger.warning("OpenRouter streaming returned invalid JSON; retrying without stream. model=%s", MODEL)
+    logger.warning("OpenRouter streaming failed; retrying without stream. error=%s model=%s", exc.__class__.__name__, MODEL)
 
 
 def _stream_token(line: str) -> str:

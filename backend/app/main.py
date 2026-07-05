@@ -9,8 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
-if os.getenv("SENTRY_DSN"):
-    sentry_sdk.init(dsn=os.environ["SENTRY_DSN"])
+sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
+if sentry_dsn:
+    sentry_sdk.init(dsn=sentry_dsn)
 
 from app.api import router
 

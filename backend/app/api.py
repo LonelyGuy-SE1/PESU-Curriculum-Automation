@@ -9,6 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, Uplo
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup, escape
+from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field, field_validator
 from weasyprint import HTML
 
@@ -48,6 +49,14 @@ def linkify(value: str) -> Markup:
 
 
 templates.filters["linkify"] = linkify
+
+
+def database_http_exception(exc: APIError) -> HTTPException:
+    message = str(exc)
+    if "schema cache" in message and "Could not find the table" in message:
+        return HTTPException(status_code=503, detail="Required database tables are missing. Run docs/schema.sql in Supabase.")
+    sentry_sdk.capture_exception(exc)
+    return HTTPException(status_code=500, detail="Database request failed.")
 
 
 class CourseSubmission(BaseModel):
@@ -107,7 +116,10 @@ class AgentToolPayload(BaseModel):
 
 
 def load_chat_session(session_id: int) -> dict:
-    result = supabase.table("chat_sessions").select("*").eq("id", session_id).single().execute()
+    try:
+        result = supabase.table("chat_sessions").select("*").eq("id", session_id).maybe_single().execute()
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
     if not result.data:
         raise HTTPException(status_code=404, detail="Chat session not found")
     return result.data
@@ -231,7 +243,9 @@ def list_all_courses():
 
 @router.get("/preview/course/{refined_id}")
 def preview_course(refined_id: int):
-    result = supabase.table("refined_submissions").select("*").eq("id", refined_id).single().execute()
+    result = supabase.table("refined_submissions").select("*").eq("id", refined_id).maybe_single().execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Refined submission not found")
     row = attach_submissions([result.data])[0]
     html = templates.get_template("jinja_sample.html").render(
         course=build_course_preview(row),
@@ -271,12 +285,17 @@ def download_pdf(sem: int, download: bool = Query(False)):
 
 @router.post("/submissions/{id}/refine")
 def refine_submission(id: int):
-    return {"message": "Refined", "data": refine(id)}
+    try:
+        return {"message": "Refined", "data": refine(id)}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
 
 
 @router.get("/refined/{refined_id}")
 def get_refined(refined_id: int):
-    result = supabase.table("refined_submissions").select("*").eq("id", refined_id).single().execute()
+    result = supabase.table("refined_submissions").select("*").eq("id", refined_id).maybe_single().execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Refined submission not found")
     row = attach_submissions([result.data])[0]
@@ -304,9 +323,11 @@ def compare_course(payload: dict):
 def create_agent_draft(payload: AgentDraftPayload):
     try:
         record = draft_record(payload.refined_id, payload.fields, payload.reason)
+        result = supabase.table("agent_drafts").insert(record).execute()
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    result = supabase.table("agent_drafts").insert(record).execute()
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
     draft = result.data[0]
     return {"message": "Draft created", "draft": draft}
 
@@ -317,6 +338,8 @@ def get_agent_draft(draft_id: int):
         return {"draft": load_agent_draft(draft_id)}
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
 
 
 @router.get("/agent/drafts/{draft_id}/preview")
@@ -325,6 +348,8 @@ def preview_agent_draft(draft_id: int):
         draft = load_agent_draft(draft_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
     html = templates.get_template("jinja_sample.html").render(
         course=draft["proposed_json"],
         curriculum_year="2025-2026",
@@ -339,24 +364,29 @@ def apply_agent_draft(draft_id: int):
         draft = load_agent_draft(draft_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
     summary = draft.get("diff_summary") or {}
     if draft.get("status") != "proposed":
         raise HTTPException(status_code=400, detail="Only proposed drafts can be applied")
     if summary.get("protected_changes"):
         raise HTTPException(status_code=400, detail="Draft changes deterministic fields")
-    supabase.table("course_revision_history").insert(
-        {
-            "refined_id": draft["refined_id"],
-            "agent_draft_id": draft_id,
-            "previous_json": draft["base_refined_json"],
-            "next_json": draft["proposed_json"],
-            "json_patch": draft["json_patch"],
-            "diff_summary": summary,
-            "change_reason": draft.get("change_reason") or "",
-        }
-    ).execute()
-    data = update_refined_fields(int(draft["refined_id"]), draft["proposed_json"])
-    supabase.table("agent_drafts").update({"status": "applied"}).eq("id", draft_id).execute()
+    try:
+        supabase.table("course_revision_history").insert(
+            {
+                "refined_id": draft["refined_id"],
+                "agent_draft_id": draft_id,
+                "previous_json": draft["base_refined_json"],
+                "next_json": draft["proposed_json"],
+                "json_patch": draft["json_patch"],
+                "diff_summary": summary,
+                "change_reason": draft.get("change_reason") or "",
+            }
+        ).execute()
+        data = update_refined_fields(int(draft["refined_id"]), draft["proposed_json"])
+        supabase.table("agent_drafts").update({"status": "applied"}).eq("id", draft_id).execute()
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
     return {"message": "Draft applied", "data": data}
 
 
@@ -366,6 +396,8 @@ def create_agent_document_draft(payload: AgentDocumentDraftPayload):
         records = [draft_record(course.refined_id, course.fields, payload.reason) for course in payload.courses]
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
     summaries = [record["diff_summary"] for record in records]
     document_summary = {
         "courses_changed": len(records),
@@ -374,23 +406,26 @@ def create_agent_document_draft(payload: AgentDocumentDraftPayload):
         "max_syllabus_change_percent": max((summary.get("syllabus_change_percent") or 0 for summary in summaries), default=0),
     }
     status = "blocked" if document_summary["courses_with_protected_changes"] else "proposed"
-    document = (
-        supabase.table("agent_document_drafts")
-        .insert(
-            {
-                "curriculum_version_id": payload.curriculum_version_id,
-                "uploaded_document_id": payload.uploaded_document_id.strip(),
-                "diff_summary": document_summary,
-                "change_reason": payload.reason.strip(),
-                "status": status,
-            }
+    try:
+        document = (
+            supabase.table("agent_document_drafts")
+            .insert(
+                {
+                    "curriculum_version_id": payload.curriculum_version_id,
+                    "uploaded_document_id": payload.uploaded_document_id.strip(),
+                    "diff_summary": document_summary,
+                    "change_reason": payload.reason.strip(),
+                    "status": status,
+                }
+            )
+            .execute()
+            .data[0]
         )
-        .execute()
-        .data[0]
-    )
-    for record in records:
-        record["document_draft_id"] = document["id"]
-    drafts = supabase.table("agent_drafts").insert(records).execute().data
+        for record in records:
+            record["document_draft_id"] = document["id"]
+        drafts = supabase.table("agent_drafts").insert(records).execute().data
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
     return {"message": "Document draft created", "document_draft": document, "drafts": drafts}
 
 
@@ -400,6 +435,8 @@ def get_agent_document_draft(document_draft_id: int):
         return load_document_draft(document_draft_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
 
 
 @router.get("/agent/document-drafts/{document_draft_id}/preview")
@@ -408,6 +445,8 @@ def preview_agent_document_draft(document_draft_id: int):
         drafts = load_document_draft(document_draft_id)["drafts"]
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
     if not drafts:
         raise HTTPException(status_code=404, detail="Document draft not found")
     courses = sorted(
@@ -520,3 +559,5 @@ def run_agent_tool(tool_name: str, payload: AgentToolPayload):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
