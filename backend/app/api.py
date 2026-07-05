@@ -13,7 +13,9 @@ from weasyprint import HTML
 
 from app.preview import build_course_preview
 from app.services.attachments import extract_text
-from app.services.diffing import diff_course, merge_fields, validate_draft
+from app.services.agent_tools import call_tool, list_tool_schemas
+from app.services.curriculum import attach_submissions, draft_record, load_agent_draft, load_document_draft, ordered_courses, refined_course, update_refined_fields
+from app.services.diffing import diff_course
 from app.services.openrouter import stream_chat
 from app.services.refinement import refine
 from app.supabase import supabase
@@ -24,29 +26,6 @@ FRONTEND_DIR = APP_DIR.parent.parent / "frontend"
 templates = Environment(loader=FileSystemLoader(APP_DIR / "templates"), autoescape=select_autoescape(["html", "xml"]))
 URL_RE = re.compile(r"https?://[^\s<>()]+")
 MAX_ATTACHMENT_CONTEXT = 12000
-
-REFINED_FIELDS = {
-    "semester",
-    "course_code",
-    "course_title",
-    "program",
-    "lecture_hours",
-    "tutorial_hours",
-    "practical_hours",
-    "self_study",
-    "credits",
-    "course_type",
-    "tools_languages",
-    "desirable_knowledge",
-    "prelude",
-    "objectives",
-    "course_outcomes",
-    "units",
-    "lab_experiments",
-    "text_books",
-    "reference_books",
-    "status",
-}
 
 
 def linkify(value: str) -> Markup:
@@ -67,23 +46,6 @@ def linkify(value: str) -> Markup:
 
 
 templates.filters["linkify"] = linkify
-
-
-def attach_submissions(rows: list[dict]) -> list[dict]:
-    ids = [row["submission_id"] for row in rows if row.get("submission_id")]
-    if not ids:
-        return rows
-    submissions = supabase.table("submissions").select("*").in_("id", ids).execute().data
-    by_id = {row["id"]: row for row in submissions}
-    for row in rows:
-        row["_submission"] = by_id.get(row.get("submission_id"), {})
-    return rows
-
-
-def ordered_courses(rows: list[dict]) -> list[dict]:
-    rows = attach_submissions(rows)
-    rows.sort(key=lambda row: (int(row.get("semester") or 0), str(row.get("course_code") or ""), int(row.get("id") or 0)))
-    return [build_course_preview(row) for row in rows]
 
 
 class CourseSubmission(BaseModel):
@@ -138,45 +100,8 @@ class ChatMessagePayload(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 
-def refined_course(refined_id: int) -> dict:
-    result = supabase.table("refined_submissions").select("*").eq("id", refined_id).single().execute()
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Refined submission not found")
-    return build_course_preview(attach_submissions([result.data])[0])
-
-
-def update_refined_fields(refined_id: int, fields: dict) -> dict | None:
-    update = {key: fields[key] for key in REFINED_FIELDS if key in fields}
-    for key in ("semester", "lecture_hours", "tutorial_hours", "practical_hours", "self_study", "credits"):
-        if key in update:
-            update[key] = int(update[key] or 0)
-    result = supabase.table("refined_submissions").update(update).eq("id", refined_id).execute()
-    return result.data[0] if result.data else None
-
-
-def draft_record(refined_id: int, fields: dict, reason: str = "", document_draft_id: int | None = None) -> dict:
-    base = refined_course(refined_id)
-    proposed = merge_fields(base, fields)
-    summary = diff_course(base, proposed)
-    issues = validate_draft(base, proposed)
-    summary["validation_issues"] = issues
-    return {
-        "refined_id": refined_id,
-        "document_draft_id": document_draft_id,
-        "base_refined_json": base,
-        "proposed_json": proposed,
-        "json_patch": summary.pop("json_patch"),
-        "diff_summary": summary,
-        "change_reason": reason.strip(),
-        "status": "blocked" if issues else "proposed",
-    }
-
-
-def load_agent_draft(draft_id: int) -> dict:
-    result = supabase.table("agent_drafts").select("*").eq("id", draft_id).single().execute()
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Agent draft not found")
-    return result.data
+class AgentToolPayload(BaseModel):
+    arguments: dict = Field(default_factory=dict)
 
 
 def load_chat_session(session_id: int) -> dict:
@@ -237,7 +162,7 @@ def chat_system_prompt(session: dict) -> str:
         course = refined_course(int(session["refined_id"]))
         context = stable_context({"active_course": course})
     elif session.get("document_draft_id"):
-        draft = get_agent_document_draft(int(session["document_draft_id"]))
+        draft = load_document_draft(int(session["document_draft_id"]))
         context = stable_context(draft)
     return f"""You are the PESU Curriculum Automation live editor assistant.
 Be concise, practical, and specific to the active curriculum data.
@@ -375,7 +300,10 @@ def compare_course(payload: dict):
 
 @router.post("/agent/drafts")
 def create_agent_draft(payload: AgentDraftPayload):
-    record = draft_record(payload.refined_id, payload.fields, payload.reason)
+    try:
+        record = draft_record(payload.refined_id, payload.fields, payload.reason)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     result = supabase.table("agent_drafts").insert(record).execute()
     draft = result.data[0]
     return {"message": "Draft created", "draft": draft}
@@ -383,12 +311,18 @@ def create_agent_draft(payload: AgentDraftPayload):
 
 @router.get("/agent/drafts/{draft_id}")
 def get_agent_draft(draft_id: int):
-    return {"draft": load_agent_draft(draft_id)}
+    try:
+        return {"draft": load_agent_draft(draft_id)}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/agent/drafts/{draft_id}/preview")
 def preview_agent_draft(draft_id: int):
-    draft = load_agent_draft(draft_id)
+    try:
+        draft = load_agent_draft(draft_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     html = templates.get_template("jinja_sample.html").render(
         course=draft["proposed_json"],
         curriculum_year="2025-2026",
@@ -399,7 +333,10 @@ def preview_agent_draft(draft_id: int):
 
 @router.post("/agent/drafts/{draft_id}/apply")
 def apply_agent_draft(draft_id: int):
-    draft = load_agent_draft(draft_id)
+    try:
+        draft = load_agent_draft(draft_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     summary = draft.get("diff_summary") or {}
     if draft.get("status") != "proposed":
         raise HTTPException(status_code=400, detail="Only proposed drafts can be applied")
@@ -423,7 +360,10 @@ def apply_agent_draft(draft_id: int):
 
 @router.post("/agent/document-drafts")
 def create_agent_document_draft(payload: AgentDocumentDraftPayload):
-    records = [draft_record(course.refined_id, course.fields, payload.reason) for course in payload.courses]
+    try:
+        records = [draft_record(course.refined_id, course.fields, payload.reason) for course in payload.courses]
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     summaries = [record["diff_summary"] for record in records]
     document_summary = {
         "courses_changed": len(records),
@@ -454,16 +394,18 @@ def create_agent_document_draft(payload: AgentDocumentDraftPayload):
 
 @router.get("/agent/document-drafts/{document_draft_id}")
 def get_agent_document_draft(document_draft_id: int):
-    document = supabase.table("agent_document_drafts").select("*").eq("id", document_draft_id).single().execute().data
-    if not document:
-        raise HTTPException(status_code=404, detail="Document draft not found")
-    drafts = supabase.table("agent_drafts").select("*").eq("document_draft_id", document_draft_id).order("id").execute().data
-    return {"document_draft": document, "drafts": drafts}
+    try:
+        return load_document_draft(document_draft_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/agent/document-drafts/{document_draft_id}/preview")
 def preview_agent_document_draft(document_draft_id: int):
-    drafts = supabase.table("agent_drafts").select("*").eq("document_draft_id", document_draft_id).execute().data
+    try:
+        drafts = load_document_draft(document_draft_id)["drafts"]
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     if not drafts:
         raise HTTPException(status_code=404, detail="Document draft not found")
     courses = sorted(
@@ -560,3 +502,18 @@ async def upload_chat_attachments(session_id: int, files: list[UploadFile] = Fil
             }
         )
     return {"attachments": attachments}
+
+
+@router.get("/agent/tools")
+def get_agent_tools():
+    return {"tools": list_tool_schemas()}
+
+
+@router.post("/agent/tools/{tool_name}")
+def run_agent_tool(tool_name: str, payload: AgentToolPayload):
+    try:
+        return {"name": tool_name, "result": call_tool(tool_name, payload.arguments)}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
