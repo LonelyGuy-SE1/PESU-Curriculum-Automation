@@ -520,7 +520,7 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
             yield sse("done", {"message_id": message["id"]})
         except Exception as exc:
             sentry_sdk.capture_exception(exc)
-            yield sse("error", {"message": str(exc)})
+            yield sse("error", {"message": "An internal error occurred. Please try again later."})
 
     return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-store"})
 
