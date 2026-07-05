@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 
 LIVE_EDITOR = Path("frontend/live-editor/index.html")
@@ -62,3 +63,21 @@ def test_dockerfile_copies_frontend_site():
 
     assert "COPY frontend/ /frontend/" in text
     assert "COPY frontend/images/" not in text
+
+
+def test_frontend_routes_mount(monkeypatch):
+    monkeypatch.setenv("SENTRY_DSN", "")
+    from app.main import app
+
+    client = TestClient(app)
+    expected = {
+        "/": "PESU Curriculum Automation",
+        "/form/": "Course Submission",
+        "/preview/": "Curriculum Preview",
+        "/live-editor/": "Live Editor",
+    }
+
+    for path, title in expected.items():
+        response = client.get(path)
+        assert response.status_code == 200
+        assert title in response.text
