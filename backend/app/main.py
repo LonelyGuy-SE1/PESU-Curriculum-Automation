@@ -19,6 +19,17 @@ if sentry_dsn:
 
 from app.api import router
 
+
+def frontend_directory():
+    app_root = Path(__file__).resolve().parents[1]
+    candidates = (
+        app_root / "frontend",
+        app_root.parent / "frontend",
+        app_root.parent.parent / "frontend",
+        Path("/frontend"),
+    )
+    return next((path for path in candidates if path.exists()), None)
+
 app = FastAPI(title="PESU Curriculum Automation")
 
 app.add_middleware(
@@ -30,6 +41,7 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api")
 
-frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
-if frontend_dir.exists():
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+frontend_dir = frontend_directory()
+if not frontend_dir:
+    raise RuntimeError("Frontend directory not found")
+app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")

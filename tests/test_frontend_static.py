@@ -61,7 +61,7 @@ def test_old_frontend_urls_redirect():
 def test_dockerfile_copies_frontend_site():
     text = Path("Dockerfile").read_text()
 
-    assert "COPY frontend/ /frontend/" in text
+    assert "COPY frontend/ frontend/" in text
     assert "COPY frontend/images/" not in text
 
 
