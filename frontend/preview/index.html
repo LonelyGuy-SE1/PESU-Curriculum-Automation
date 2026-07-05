@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Curriculum Preview</title>
+    <link rel="stylesheet" href="preview.css" />
+  </head>
+  <body>
+    <div class="toolbar">
+      <select id="semester" aria-label="Semester">
+        <option value="all">Overall</option>
+        <option value="1">Semester 1</option>
+        <option value="2">Semester 2</option>
+        <option value="3">Semester 3</option>
+        <option value="4">Semester 4</option>
+        <option value="5">Semester 5</option>
+        <option value="6">Semester 6</option>
+        <option value="7">Semester 7</option>
+        <option value="8">Semester 8</option>
+      </select>
+      <a id="open" target="_blank" rel="noreferrer">Open</a>
+      <a id="download">Download</a>
+      <span id="status"></span>
+    </div>
+    <iframe id="viewer" title="Curriculum PDF"></iframe>
+
+    <script src="preview.js" defer></script>
+  </body>
+</html>
