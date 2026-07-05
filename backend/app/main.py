@@ -9,10 +9,26 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
-if os.getenv("SENTRY_DSN"):
-    sentry_sdk.init(dsn=os.environ["SENTRY_DSN"])
+sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
+if sentry_dsn:
+    sentry_config = {"dsn": sentry_dsn, "environment": os.getenv("SENTRY_ENVIRONMENT", "").strip() or "production"}
+    sentry_release = os.getenv("SENTRY_RELEASE", "").strip()
+    if sentry_release:
+        sentry_config["release"] = sentry_release
+    sentry_sdk.init(**sentry_config)
 
 from app.api import router
+
+
+def frontend_directory():
+    app_root = Path(__file__).resolve().parents[1]
+    candidates = (
+        app_root / "frontend",
+        app_root.parent / "frontend",
+        app_root.parent.parent / "frontend",
+        Path("/frontend"),
+    )
+    return next((path for path in candidates if path.exists()), None)
 
 app = FastAPI(title="PESU Curriculum Automation")
 
@@ -25,5 +41,7 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api")
 
-if Path("../frontend").exists():
-    app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
+frontend_dir = frontend_directory()
+if not frontend_dir:
+    raise RuntimeError("Frontend directory not found")
+app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")

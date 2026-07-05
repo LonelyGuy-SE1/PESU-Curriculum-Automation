@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Editor - PESU</title>
+    <link rel="stylesheet" href="live-editor.css" />
+  </head>
+  <body>
+    <div class="toolbar">
+      <select id="semester" aria-label="Semester">
+        <option value="1">Semester 1</option>
+        <option value="2">Semester 2</option>
+        <option value="3">Semester 3</option>
+        <option value="4">Semester 4</option>
+        <option value="5">Semester 5</option>
+        <option value="6">Semester 6</option>
+        <option value="7">Semester 7</option>
+        <option value="8">Semester 8</option>
+      </select>
+      <select id="course" aria-label="Course"></select>
+      <select id="view-mode" aria-label="Preview mode">
+        <option value="course">Course Preview</option>
+        <option value="document">Full Document</option>
+      </select>
+      <a id="preview" target="_blank" rel="noreferrer">Open</a>
+      <span id="status"></span>
+    </div>
+
+    <main class="workspace">
+      <section class="preview-pane" aria-label="Course preview">
+        <iframe id="viewer" title="Course preview"></iframe>
+        <div class="loading" id="loading">Loading...</div>
+      </section>
+
+      <aside class="side-pane">
+        <div class="tabs" role="tablist" aria-label="Editor tools">
+          <button class="tab active" id="chat-tab" type="button" role="tab" aria-selected="true" aria-controls="chat-panel">Chat</button>
+          <button class="tab" id="fields-tab" type="button" role="tab" aria-selected="false" aria-controls="fields-panel">Fields</button>
+          <button class="tab" id="review-tab" type="button" role="tab" aria-selected="false" aria-controls="review-panel">Review</button>
+        </div>
+
+        <section class="panel chat-panel active" id="chat-panel" role="tabpanel" aria-labelledby="chat-tab">
+          <div class="chat-log" id="chat-log" aria-live="polite"></div>
+          <div class="composer">
+            <div class="attachments" id="draft-attachments"></div>
+            <textarea id="message" aria-label="Message"></textarea>
+            <div class="composer-actions">
+              <button id="attach" type="button">Attach</button>
+              <input id="files" type="file" multiple accept="image/*,.pdf,.txt,.doc,.docx" hidden />
+              <button id="clear-chat" type="button">Clear</button>
+              <button class="primary" id="send" type="button">Send</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel fields-panel" id="fields-panel" role="tabpanel" aria-labelledby="fields-tab">
+          <textarea id="editor" spellcheck="false" aria-label="Course fields"></textarea>
+          <div class="field-actions">
+            <button id="draft" type="button">Create Draft</button>
+            <button class="primary" id="save" type="button">Save</button>
+          </div>
+        </section>
+
+        <section class="panel review-panel" id="review-panel" role="tabpanel" aria-labelledby="review-tab">
+          <div class="document-draft">
+            <div class="draft-loader">
+              <input id="course-draft-id" type="number" min="1" aria-label="Course draft ID" />
+              <button id="load-course-draft" type="button">Course</button>
+            </div>
+            <div class="draft-loader">
+              <input id="document-draft-id" type="number" min="1" aria-label="Document draft ID" />
+              <button id="load-document-draft" type="button">Document</button>
+            </div>
+          </div>
+          <div class="review-summary" id="review-summary"></div>
+          <div class="diff-view" id="diff-view"></div>
+          <div class="field-actions">
+            <button id="preview-draft" type="button">Preview Draft</button>
+            <button class="primary" id="apply-draft" type="button">Apply Draft</button>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <script src="live-editor.js" defer></script>
+  </body>
+</html>

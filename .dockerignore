@@ -9,6 +9,3 @@ AGENTS.md
 README.md
 LICENSE
 *.md
-frontend/**
-!frontend/images/
-!frontend/images/**

@@ -450,6 +450,7 @@ send.addEventListener("click", async () => {
   const content = message.value.trim();
   if (!content && !queuedFiles.length) return;
   send.disabled = true;
+  let assistant = null;
   try {
     await ensureChatSession();
     const attachments = queuedFiles;
@@ -459,7 +460,7 @@ send.addEventListener("click", async () => {
       attachments,
       created_at: new Date().toISOString(),
     });
-    const assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
+    assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
     message.value = "";
     queuedFiles = [];
     renderDraftAttachments();
@@ -485,6 +486,14 @@ send.addEventListener("click", async () => {
       if (event === "error") throw new Error(data.message || "Chat failed");
       if (event === "done") statusText.textContent = "Response saved.";
     });
+  } catch (error) {
+    const text = error instanceof Error ? error.message : "Chat failed";
+    statusText.textContent = text;
+    if (assistant) {
+      renderMessageContent(assistant.content, text);
+    } else {
+      appendMessage({ role: "assistant", content: text, created_at: new Date().toISOString() });
+    }
   } finally {
     send.disabled = false;
   }
