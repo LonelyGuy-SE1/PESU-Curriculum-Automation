@@ -23,6 +23,7 @@ body {
 }
 
 select,
+input,
 a {
   height: 34px;
   border: 1px solid #9ca3af;
@@ -34,6 +35,19 @@ a {
 
 select {
   min-width: 150px;
+}
+
+input {
+  width: 120px;
+  padding: 0 10px;
+}
+
+.year-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #374151;
+  font-size: 14px;
 }
 
 a {

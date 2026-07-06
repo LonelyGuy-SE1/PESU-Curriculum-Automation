@@ -1,10 +1,31 @@
 const params = new URLSearchParams(location.search);
 const requestedSemester = params.get("sem");
+const requestedYear = params.get("curriculum_year") || params.get("year") || "";
 const semester = document.getElementById("semester");
+const curriculumYear = document.getElementById("curriculum-year");
 const viewer = document.getElementById("viewer");
 const openLink = document.getElementById("open");
 const downloadLink = document.getElementById("download");
 const statusText = document.getElementById("status");
+curriculumYear.value = requestedYear;
+
+function clearPreview(message) {
+  viewer.removeAttribute("src");
+  openLink.removeAttribute("href");
+  downloadLink.removeAttribute("href");
+  statusText.textContent = message;
+}
+
+function yearValue() {
+  return curriculumYear.value.trim();
+}
+
+function pdfUrl(sem, download = false) {
+  const path = sem === "all" ? "/api/preview/pdf" : `/api/preview/semester/${sem}/pdf`;
+  const query = new URLSearchParams({ curriculum_year: yearValue() });
+  if (download) query.set("download", "true");
+  return `${path}?${query}`;
+}
 
 async function courseIds(sem) {
   const url = sem === "all" ? "/api/preview/courses" : `/api/preview/semester/${sem}/courses`;
@@ -26,22 +47,28 @@ async function loadSemester(sem) {
   semester.value = sem;
   statusText.textContent = "Loading...";
 
-  if (!(await courseIds(sem)).length) {
-    viewer.removeAttribute("src");
-    openLink.removeAttribute("href");
-    downloadLink.removeAttribute("href");
-    statusText.textContent = sem === "all" ? "No refined courses found." : `No refined courses found for Semester ${sem}.`;
+  if (!/^\d{4}-\d{4}$/.test(yearValue())) {
+    clearPreview("Enter academic year as YYYY-YYYY.");
     return;
   }
 
-  const pdf = sem === "all" ? "/api/preview/pdf" : `/api/preview/semester/${sem}/pdf`;
+  if (!(await courseIds(sem)).length) {
+    clearPreview(sem === "all" ? "No refined courses found." : `No refined courses found for Semester ${sem}.`);
+    return;
+  }
+
+  const pdf = pdfUrl(sem);
   viewer.src = pdf;
   openLink.href = pdf;
-  downloadLink.href = `${pdf}?download=true`;
+  downloadLink.href = pdfUrl(sem, true);
   statusText.textContent = sem === "all" ? "Overall" : `Semester ${sem}`;
 }
 
 semester.addEventListener("change", () => {
+  loadSemester(semester.value);
+});
+
+curriculumYear.addEventListener("change", () => {
   loadSemester(semester.value);
 });
 
