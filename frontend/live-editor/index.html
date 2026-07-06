@@ -41,6 +41,10 @@
         </div>
 
         <section class="panel chat-panel active" id="chat-panel" role="tabpanel" aria-labelledby="chat-tab">
+          <div class="thread-bar">
+            <select id="chat-session" aria-label="Chat thread"></select>
+            <button id="new-chat" type="button">New</button>
+          </div>
           <div class="chat-log" id="chat-log" aria-live="polite"></div>
           <div class="composer">
             <div class="attachments" id="draft-attachments"></div>
@@ -65,11 +69,11 @@
         <section class="panel review-panel" id="review-panel" role="tabpanel" aria-labelledby="review-tab">
           <div class="document-draft">
             <div class="draft-loader">
-              <input id="course-draft-id" type="number" min="1" aria-label="Course draft ID" />
+              <select id="course-draft-select" aria-label="Course draft"></select>
               <button id="load-course-draft" type="button">Course</button>
             </div>
             <div class="draft-loader">
-              <input id="document-draft-id" type="number" min="1" aria-label="Document draft ID" />
+              <select id="document-draft-select" aria-label="Document draft"></select>
               <button id="load-document-draft" type="button">Document</button>
             </div>
           </div>

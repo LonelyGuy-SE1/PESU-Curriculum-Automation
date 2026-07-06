@@ -145,7 +145,16 @@ iframe {
 }
 
 .chat-panel {
-  grid-template-rows: 1fr auto;
+  grid-template-rows: auto 1fr auto;
+}
+
+.thread-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid #d1d5db;
+  background: #fff;
 }
 
 .chat-log {
@@ -319,7 +328,7 @@ iframe {
 
 .draft-loader {
   display: grid;
-  grid-template-columns: minmax(96px, 1fr) 72px;
+  grid-template-columns: minmax(0, 1fr) 72px;
   gap: 8px;
 }
 
