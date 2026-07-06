@@ -92,7 +92,7 @@ def _course(**values):
 def test_curriculum_template_renders_regular_semester_summary():
     html = templates.get_template("jinja_sample.html").render(
         courses=[
-            _course(course_code="UE24CS251A", course_title="Digital Design", semester="3", credits="5", lecture_hours="4", practical_hours="2", self_study="5"),
+            _course(course_code="UE25CS251A", course_title="Digital Design", semester="3", credits="5", lecture_hours="4", practical_hours="2", self_study="5"),
             _course(course_code="UE25MA201A", course_title="Bridge Course", semester="3", credits="0", lecture_hours="2", self_study="0", course_type="Foundation Course"),
         ],
         semester=3,
@@ -101,7 +101,8 @@ def test_curriculum_template_renders_regular_semester_summary():
         show_summaries=True,
     )
 
-    assert "III SEMESTER 2025-2026" in html
+    assert "III SEMESTER (2024-28 BATCH)" in html
+    assert "UE24CS251A" in html
     assert "Digital Design" in html
     assert "Bridge Course" in html
     assert "4/6" in html
@@ -121,11 +122,15 @@ def test_curriculum_template_renders_semester_five_elective_summary():
         show_summaries=True,
     )
 
-    assert "V SEMESTER 2025-2026" in html
+    assert "V SEMESTER (2023-27 BATCH)" in html
     assert "Elective-I" in html
     assert "Elective-II" in html
+    assert "Elective I" in html
     assert "Advanced Algorithms" in html
     assert "Image Processing" in html
+    assert "ELECTIVES TO BE OPTED FOR SPECIALIZATION" in html
+    assert "System and Core Computing (SCC)" in html
+    assert "UE23CS342AA1" in html
 
 
 def test_ordered_courses_preserves_refined_order_within_semester():

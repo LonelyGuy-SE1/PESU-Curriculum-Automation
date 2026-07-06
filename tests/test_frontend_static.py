@@ -62,9 +62,12 @@ def test_versions_page_uses_snapshot_language():
 
 def test_preview_uses_external_assets():
     text = Path("frontend/preview/index.html").read_text()
+    script = Path("frontend/preview/preview.js").read_text()
 
     assert '<link rel="stylesheet" href="preview.css" />' in text
     assert '<script src="preview.js" defer></script>' in text
+    assert 'id="curriculum-year"' in text
+    assert "curriculum_year" in script
     assert "<style>" not in text
     assert "<script>" not in text
 
