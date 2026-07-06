@@ -133,6 +133,50 @@ def test_curriculum_template_renders_semester_five_elective_summary():
     assert "UE23CS342AA1" in html
 
 
+def test_curriculum_template_renders_semester_six_elective_groups():
+    html = templates.get_template("jinja_sample.html").render(
+        courses=[
+            _course(course_code="UE23CS351B", course_title="Cloud Computing", semester="6", practical_hours="2", self_study="5", credits="5", course_type="Core Course-Lab Integrated"),
+            _course(course_code="UE23CS342BAX", course_title="Elective III", semester="6", course_type="Elective Course"),
+            _course(course_code="UE23CS343BBX", course_title="Elective IV", semester="6", course_type="Elective Course"),
+            _course(course_code="UE23CS342BA1", course_title="Supply Chain Management for Engineers", semester="6", course_type="Elective Course"),
+            _course(course_code="UE23CS343BB1", course_title="Heterogeneous Parallelism", semester="6", course_type="Elective Course"),
+        ],
+        semester=6,
+        curriculum_year="2025-2026",
+        asset_root="",
+        show_summaries=True,
+    )
+
+    assert "VI SEMESTER (2023-27 BATCH)" in html
+    assert "Elective-III" in html
+    assert "Elective-IV" in html
+    assert "ELECTIVES TO BE OPTED FOR SPECIALIZATION" in html
+    assert "UE23CS343BB12" in html
+
+
+def test_curriculum_template_renders_final_year_summary():
+    html = templates.get_template("jinja_sample.html").render(
+        courses=[
+            _course(course_code="UE22CS441A", course_title="Capstone Project Phase-III", semester="7", lecture_hours="0", practical_hours="16", self_study="4", credits="4", course_type="Project Work"),
+            _course(course_code="UZ22UZ422A", course_title="Technical writing", semester="7", lecture_hours="0", tutorial_hours="2", self_study="2", credits="2", course_type="Special Topic"),
+            _course(course_code="UE22AM421AXX", course_title="Special Topic", semester="7", lecture_hours="0", tutorial_hours="2", self_study="2", credits="2", course_type="Special Topic"),
+            _course(course_code="UE22CS421B", course_title="Capstone Project Phase-IV", semester="8", lecture_hours="0", practical_hours="8", self_study="4", credits="4", course_type="Project Work"),
+            _course(course_code="UE22CS461XB", course_title="Internship", semester="8", lecture_hours="0", practical_hours="16", self_study="8", credits="8", course_type="Internship"),
+        ],
+        semester="",
+        curriculum_year="2025-2026",
+        asset_root="",
+        show_summaries=True,
+    )
+
+    assert "VII SEMESTER (2022-26 BATCH)" in html
+    assert "VIII SEMESTER (2022-26 BATCH)" in html
+    assert "Technical writing" in html
+    assert "Internship" in html
+    assert "AI Tools / Tools / Languages" not in html.split("VII SEMESTER", 1)[1].split("</article>", 1)[0]
+
+
 def test_ordered_courses_preserves_refined_order_within_semester():
     rows = [
         {"id": 6, "semester": 5, "course_code": "UE23CS320A", "course_title": "Capstone Project", "credits": 2},

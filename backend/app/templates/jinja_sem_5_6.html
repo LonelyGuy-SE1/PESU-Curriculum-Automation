@@ -37,7 +37,7 @@
       {% set course_type = summary_course.course_type|string|lower %}
       {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
       {% set has_elective_code = "AA" in code or "AB" in code or "BA" in code or "BB" in code %}
-      {% set is_actual_elective = ("elective" in course_type or "elective" in title) and has_elective_code and not is_placeholder %}
+      {% set is_actual_elective = has_elective_code and not is_placeholder %}
       {% if summary_course.semester|string == summary_semester|string and not is_actual_elective %}
         {% set credit_value = summary_course.credits|int %}
         {% set totals.count = totals.count + 1 %}
@@ -59,7 +59,7 @@
       {% set title = summary_course.course_title|string|lower %}
       {% set course_type = summary_course.course_type|string|lower %}
       {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
-      {% set is_elective = ("elective" in course_type or "elective" in title) and not is_placeholder %}
+      {% set is_elective = not is_placeholder %}
       {% if summary_course.semester|string == summary_semester|string and is_elective %}
         {% if summary_semester == 5 and "AA" in code %}
           {% set elective_a.count = elective_a.count + 1 %}
@@ -92,7 +92,7 @@
               <col class="summary-hour" />
               <col class="summary-hour" />
               <col class="summary-credit" />
-              <col />
+              <col class="summary-tools" />
               <col class="summary-type" />
             </colgroup>
             <tbody>
@@ -119,7 +119,7 @@
                 {% set course_type = summary_course.course_type|string|lower %}
                 {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
                 {% set has_elective_code = "AA" in code or "AB" in code or "BA" in code or "BB" in code %}
-                {% set is_actual_elective = ("elective" in course_type or "elective" in title) and has_elective_code and not is_placeholder %}
+                {% set is_actual_elective = has_elective_code and not is_placeholder %}
                 {% if summary_course.semester|string == summary_semester|string and not is_actual_elective %}
                   {{ course_row(summary_course, row.number) }}
                   {% set row.number = row.number + 1 %}
@@ -140,8 +140,6 @@
         {% endif %}
 
         {% for group in ["a", "b"] %}
-          {% set group_count = elective_a.count if group == "a" else elective_b.count %}
-          {% if group_count %}
             <table class="meta summary-table">
               <colgroup>
                 <col class="summary-number" />
@@ -152,7 +150,7 @@
                 <col class="summary-hour" />
                 <col class="summary-hour" />
                 <col class="summary-credit" />
-                <col />
+                <col class="summary-tools" />
                 <col class="summary-type" />
               </colgroup>
               <tbody>
@@ -171,7 +169,7 @@
                   {% set title = summary_course.course_title|string|lower %}
                   {% set course_type = summary_course.course_type|string|lower %}
                   {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
-                  {% set is_elective = ("elective" in course_type or "elective" in title) and not is_placeholder %}
+                  {% set is_elective = not is_placeholder %}
                   {% set is_group_a = (summary_semester == 5 and "AA" in code) or (summary_semester == 6 and "BA" in code) %}
                   {% set is_group_b = (summary_semester == 5 and "AB" in code) or (summary_semester == 6 and "BB" in code) %}
                   {% if summary_course.semester|string == summary_semester|string and is_elective and ((group == "a" and is_group_a) or (group == "b" and is_group_b)) %}
@@ -181,15 +179,26 @@
                 {% endfor %}
               </tbody>
             </table>
-          {% endif %}
         {% endfor %}
 
-        {% if summary_semester == 5 %}
-          {% set specializations = [
-            {"letter": "A", "name": "System and Core Computing (SCC)", "elective_i": ["342AA1", "342AA8", "342AA9"], "elective_ii": ["343AB1", "343AB2", "343AB3", "343AB4", "343AB8"]},
-            {"letter": "B", "name": "Machine Intelligence and Data Science (MIDS)", "elective_i": ["342AA2", "342AA5", "342AA6", "342AA8"], "elective_ii": ["343AB1", "343AB2", "343AB7"]},
-            {"letter": "C", "name": "Cyber Security and Connected Systems (CSCS)", "elective_i": ["342AA3", "342AA4", "342AA5", "342AA7"], "elective_ii": ["343AB5", "343AB6", "343AB7"]},
-          ] %}
+        {% if summary_semester in [5, 6] %}
+          {% if summary_semester == 5 %}
+            {% set first_label = "Elective-I" %}
+            {% set second_label = "Elective-II" %}
+            {% set specializations = [
+              {"letter": "A", "name": "System and Core Computing (SCC)", "first": ["342AA1", "342AA8", "342AA9"], "second": ["343AB1", "343AB2", "343AB3", "343AB4", "342AB8"]},
+              {"letter": "B", "name": "Machine Intelligence and Data Science (MIDS)", "first": ["342AA2", "342AA5", "342AA6", "342AA8"], "second": ["343AB1", "342AB2", "342AB7"]},
+              {"letter": "C", "name": "Cyber Security and Connected Systems (CSCS)", "first": ["342AA3", "342AA4", "342AA5", "342AA7"], "second": ["343AB5", "342AB6", "342AB7"]},
+            ] %}
+          {% else %}
+            {% set first_label = "Elective-III" %}
+            {% set second_label = "Elective-IV" %}
+            {% set specializations = [
+              {"letter": "A", "name": "System and Core Computing (SCC)", "first": ["342BA1", "342BA2", "342BA3"], "second": ["343BB1", "343BB3", "343BB5", "343BB10"]},
+              {"letter": "B", "name": "Machine Intelligence and Data Science (MIDS)", "first": ["342BA2", "342BA3", "342BA4", "342BA7", "342BA10"], "second": ["343BB2", "343BB4", "343BB7", "343BB9", "343BB10"]},
+              {"letter": "C", "name": "Cyber Security and Connected Systems (CSCS)", "first": ["342BA5", "342BA6", "342BA7", "342BA8"], "second": ["343BB6", "343BB7", "343BB8", "343BB9", "343BB11", "343BB12"]},
+            ] %}
+          {% endif %}
           <table class="meta summary-table specialization-table">
             <colgroup>
               <col class="summary-number" />
@@ -204,15 +213,15 @@
               <tr>
                 <th class="center">Sl. No.</th>
                 <th>Specialization</th>
-                <th>Elective-I</th>
-                <th>Elective-II</th>
+                <th>{{ first_label }}</th>
+                <th>{{ second_label }}</th>
               </tr>
               {% for specialization in specializations %}
                 <tr>
                   <td class="center">{{ specialization.letter }}</td>
                   <td>{{ specialization.name }}</td>
-                  <td>{{ specialization_codes(specialization.elective_i, summary_semester, curriculum_year) }}</td>
-                  <td>{{ specialization_codes(specialization.elective_ii, summary_semester, curriculum_year) }}</td>
+                  <td>{{ specialization_codes(specialization.first, summary_semester, curriculum_year) }}</td>
+                  <td>{{ specialization_codes(specialization.second, summary_semester, curriculum_year) }}</td>
                 </tr>
               {% endfor %}
             </tbody>

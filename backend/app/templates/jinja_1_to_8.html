@@ -17,13 +17,28 @@
   </tr>
 {%- endmacro %}
 
+{% macro final_year_row(course, number) -%}
+  <tr>
+    <td class="center">{{ number }}</td>
+    <td>{{ course.course_code | course_code_for_year(course.semester, curriculum_year) }}</td>
+    <td>{{ course.course_title }}</td>
+    <td class="center">{{ course.lecture_hours }}</td>
+    <td class="center">{{ course.tutorial_hours }}</td>
+    <td class="center">{{ course.practical_hours }}</td>
+    <td class="center">{{ course.self_study }}</td>
+    <td class="center">{{ course.credits }}</td>
+    <td class="center">{{ course.course_type }}</td>
+  </tr>
+{%- endmacro %}
+
 {% macro total_cell(total, credit_total) -%}
   {% if total != credit_total %}{{ credit_total }}/{{ total }}{% else %}{{ total }}{% endif %}
 {%- endmacro %}
 
 {% set requested_semester = semester|string if semester is defined and semester else "" %}
-{% for summary_semester in [1, 2, 3, 4, 7, 8] %}
-  {% if not requested_semester or requested_semester == summary_semester|string %}
+{% if summary_range | default("") != "final" %}
+  {% for summary_semester in [1, 2, 3, 4] %}
+    {% if not requested_semester or requested_semester == summary_semester|string %}
     {% set totals = namespace(count=0, lecture=0, lecture_credit=0, tutorial=0, practical=0, self_study=0, credits=0) %}
     {% for summary_course in course_list %}
       {% if summary_course.semester|string == summary_semester|string %}
@@ -58,7 +73,7 @@
             <col class="summary-hour" />
             <col class="summary-hour" />
             <col class="summary-credit" />
-            <col />
+            <col class="summary-tools" />
             <col class="summary-type" />
           </colgroup>
           <tbody>
@@ -103,5 +118,90 @@
         </table>
       </article>
     {% endif %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+{% if summary_range | default("") != "early" and (not requested_semester or requested_semester in ["7", "8"]) %}
+  {% set final = namespace(count=0) %}
+  {% for summary_course in course_list %}
+    {% if summary_course.semester|string in ["7", "8"] and (not requested_semester or requested_semester == summary_course.semester|string) %}
+      {% set final.count = final.count + 1 %}
+    {% endif %}
+  {% endfor %}
+
+  {% if final.count %}
+    <article class="summary-page final-year-summary">
+      <header class="letterhead">
+        <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
+        <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />
+      </header>
+
+      {% for summary_semester in [7, 8] %}
+        {% if not requested_semester or requested_semester == summary_semester|string %}
+          {% set totals = namespace(count=0, lecture=0, tutorial=0, practical=0, self_study=0, credits=0) %}
+          {% for summary_course in course_list %}
+            {% if summary_course.semester|string == summary_semester|string %}
+              {% set totals.count = totals.count + 1 %}
+              {% set totals.lecture = totals.lecture + summary_course.lecture_hours|int %}
+              {% set totals.tutorial = totals.tutorial + summary_course.tutorial_hours|int %}
+              {% set totals.practical = totals.practical + summary_course.practical_hours|int %}
+              {% set totals.self_study = totals.self_study + summary_course.self_study|int %}
+              {% set totals.credits = totals.credits + summary_course.credits|int %}
+            {% endif %}
+          {% endfor %}
+
+          {% if totals.count %}
+            <h2 class="semester-title">{{ semester_name(summary_semester) }} SEMESTER {{ batch_label(summary_semester, curriculum_year) }}</h2>
+            <table class="meta summary-table final-year-table">
+              <colgroup>
+                <col class="final-number" />
+                <col class="final-code" />
+                <col class="final-title" />
+                <col class="final-hour" />
+                <col class="final-hour" />
+                <col class="final-hour" />
+                <col class="final-hour" />
+                <col class="final-credit" />
+                <col class="final-type" />
+              </colgroup>
+              <tbody>
+                <tr>
+                  <th rowspan="2" class="center">Sl. No.</th>
+                  <th rowspan="2">Course Code</th>
+                  <th rowspan="2">Course Title</th>
+                  <th colspan="4" class="center">Hours/week</th>
+                  <th class="center nowrap">Credits</th>
+                  <th rowspan="2" class="center">Course Type</th>
+                </tr>
+                <tr>
+                  <th class="center">L</th>
+                  <th class="center">T</th>
+                  <th class="center">P</th>
+                  <th class="center">S</th>
+                  <th class="center">C</th>
+                </tr>
+                {% set row = namespace(number=1) %}
+                {% for summary_course in course_list %}
+                  {% if summary_course.semester|string == summary_semester|string %}
+                    {{ final_year_row(summary_course, row.number) }}
+                    {% set row.number = row.number + 1 %}
+                  {% endif %}
+                {% endfor %}
+                <tr>
+                  <th colspan="3" class="center">Total</th>
+                  <td class="center">{{ totals.lecture }}</td>
+                  <td class="center">{{ totals.tutorial }}</td>
+                  <td class="center">{{ totals.practical }}</td>
+                  <td class="center">{{ totals.self_study }}</td>
+                  <td class="center">{{ totals.credits }}</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    </article>
   {% endif %}
-{% endfor %}
+{% endif %}

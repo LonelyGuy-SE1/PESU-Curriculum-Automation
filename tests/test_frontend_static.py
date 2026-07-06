@@ -68,6 +68,7 @@ def test_preview_uses_external_assets():
     assert '<script src="preview.js" defer></script>' in text
     assert 'id="curriculum-year"' in text
     assert "curriculum_year" in script
+    assert "localStorage" in script
     assert "<style>" not in text
     assert "<script>" not in text
 

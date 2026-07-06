@@ -1,6 +1,7 @@
 const params = new URLSearchParams(location.search);
 const requestedSemester = params.get("sem");
-const requestedYear = params.get("curriculum_year") || params.get("year") || "";
+const storedYear = localStorage.getItem("curriculumYear") || "";
+const requestedYear = params.get("curriculum_year") || params.get("year") || storedYear;
 const semester = document.getElementById("semester");
 const curriculumYear = document.getElementById("curriculum-year");
 const viewer = document.getElementById("viewer");
@@ -8,6 +9,7 @@ const openLink = document.getElementById("open");
 const downloadLink = document.getElementById("download");
 const statusText = document.getElementById("status");
 curriculumYear.value = requestedYear;
+if (requestedYear) localStorage.setItem("curriculumYear", requestedYear);
 
 function clearPreview(message) {
   viewer.removeAttribute("src");
@@ -18,6 +20,10 @@ function clearPreview(message) {
 
 function yearValue() {
   return curriculumYear.value.trim();
+}
+
+function saveYear() {
+  if (yearValue()) localStorage.setItem("curriculumYear", yearValue());
 }
 
 function pdfUrl(sem, download = false) {
@@ -69,6 +75,7 @@ semester.addEventListener("change", () => {
 });
 
 curriculumYear.addEventListener("change", () => {
+  saveYear();
   loadSemester(semester.value);
 });
 

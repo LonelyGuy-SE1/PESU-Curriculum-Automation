@@ -172,11 +172,11 @@
       }
 
       .summary-code {
-        width: 14%;
+        width: 15%;
       }
 
       .summary-title-column {
-        width: 26%;
+        width: 22%;
       }
 
       .summary-hour {
@@ -187,12 +187,45 @@
         width: 7%;
       }
 
+      .summary-tools {
+        width: 18%;
+      }
+
       .summary-type {
-        width: 13%;
+        width: 12%;
       }
 
       .nowrap {
         white-space: nowrap;
+      }
+
+      .summary-table td:nth-child(8),
+      .summary-table th:nth-child(8) {
+        text-align: center;
+      }
+
+      .final-number {
+        width: 7%;
+      }
+
+      .final-code {
+        width: 16%;
+      }
+
+      .final-title {
+        width: 23%;
+      }
+
+      .final-hour {
+        width: 6%;
+      }
+
+      .final-credit {
+        width: 8%;
+      }
+
+      .final-type {
+        width: 22%;
       }
 
       .empty {
@@ -216,8 +249,11 @@
     {% set course_list = courses if courses is defined else [course] %}
     {% if course_list %}
       {% if show_summaries | default(false) %}
+        {% set summary_range = "early" %}
         {% include "jinja_1_to_8.html" %}
         {% include "jinja_sem_5_6.html" %}
+        {% set summary_range = "final" %}
+        {% include "jinja_1_to_8.html" %}
       {% endif %}
       {% for course in course_list %}
         <article class="course">
