@@ -66,8 +66,14 @@ def call(system: str, user: str) -> dict:
         return json.loads(text)
 
 
-def stream_chat(system: str, messages: list[dict]):
+def stream_chat(system: str, messages: list[dict], tools: list[dict] | None = None, tool_runner=None, on_tool_result=None):
     chat_messages = _messages(system, messages)
+    if tools and tool_runner:
+        direct = _chat_with_tools(chat_messages, tools, tool_runner, on_tool_result)
+        if direct:
+            yield direct
+            return
+
     emitted = False
     try:
         for token in _stream_chat(chat_messages):
@@ -102,6 +108,58 @@ def _chat_text(messages: list[dict]) -> str:
         response = client.post(URL, headers=_headers(), json={"model": MODEL, "messages": messages})
         _raise_for_status(response)
         return _message_content(response.json())
+
+
+def _chat_message(messages: list[dict], tools: list[dict]) -> dict:
+    with Client(timeout=120) as client:
+        response = client.post(URL, headers=_headers(), json={"model": MODEL, "messages": messages, "tools": tools})
+        _raise_for_status(response)
+        try:
+            return response.json()["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError("OpenRouter response missing assistant message") from exc
+
+
+def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_tool_result=None) -> str:
+    for _ in range(3):
+        message = _chat_message(messages, tools)
+        tool_calls = message.get("tool_calls") or []
+        if not tool_calls:
+            return str(message.get("content") or "").strip()
+
+        messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": tool_calls})
+        for tool_call in tool_calls:
+            name = (tool_call.get("function") or {}).get("name") or ""
+            try:
+                result = _run_tool(tool_runner, name, _tool_arguments(tool_call))
+            except ValueError as exc:
+                result = {"error": str(exc)}
+            if on_tool_result:
+                on_tool_result(name, result)
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.get("id") or name,
+                    "name": name,
+                    "content": json.dumps(result, ensure_ascii=False),
+                }
+            )
+    return "I created tool results, but could not finish the response. Please check the Review panel."
+
+
+def _tool_arguments(tool_call: dict) -> dict:
+    raw = (tool_call.get("function") or {}).get("arguments") or "{}"
+    arguments = json.loads(raw) if isinstance(raw, str) else raw
+    if not isinstance(arguments, dict):
+        raise ValueError("Tool arguments must be an object")
+    return arguments
+
+
+def _run_tool(tool_runner, name: str, arguments: dict) -> dict:
+    try:
+        return tool_runner(name, arguments)
+    except Exception as exc:
+        return {"error": str(exc)}
 
 
 def _log_stream_fallback(exc: Exception) -> None:

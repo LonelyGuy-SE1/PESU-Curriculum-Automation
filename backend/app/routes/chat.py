@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from postgrest.exceptions import APIError
 
 from app.models.chat import ChatMessagePayload, ChatSessionPayload
+from app.services.agent_tools import call_tool, list_tool_schemas
 from app.services.attachments import extract_text
 from app.services.curriculum import load_document_draft, refined_course
 from app.services.errors import database_http_exception
@@ -81,14 +82,17 @@ def chat_system_prompt(session: dict) -> str:
     context = ""
     if session.get("refined_id"):
         course = refined_course(int(session["refined_id"]))
-        context = stable_context({"active_course": course})
+        context = stable_context({"active_refined_id": session["refined_id"], "active_course": course})
     elif session.get("document_draft_id"):
         context = stable_context(load_document_draft(int(session["document_draft_id"])))
     return f"""You are the PESU Curriculum Automation live editor assistant.
 Be concise, practical, and specific to the active curriculum data.
-You may help the user understand fields, compare drafts, and decide what to edit.
-You must not claim that you directly changed the database or applied a draft.
-When a user asks for an edit, explain the exact fields that should change and remind them to review the diff before applying.
+You can propose edits by creating human-reviewable drafts with the available tools.
+When the user asks to change the active course, call create_course_draft with the active_refined_id, only the fields that should change, and a short reason.
+Never apply a draft, never claim a draft was applied, and never claim the refined database was changed.
+After creating a draft, tell the user to review the diff in the Review panel before applying it.
+If the user asks for an unsafe or unclear edit, ask for the missing detail instead of guessing.
+Do not change deterministic fields such as program, hours, credits, or course type.
 
 Active context:
 {context or "No active course or document draft is selected."}"""
@@ -135,13 +139,23 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
 
     def stream():
         answer = []
+        tool_results = []
+
+        def remember_tool_result(name: str, result: dict) -> None:
+            tool_results.append({"name": name, "result": result})
+
         try:
             yield sse("status", {"message": "Message saved"})
             rows = chat_messages(session_id)
             yield sse("status", {"message": "Loading context"})
             system = chat_system_prompt(session)
             yield sse("status", {"message": "Streaming response"})
-            for token in stream_chat(system, model_messages(session_id, rows)):
+            for token in stream_chat(system, model_messages(session_id, rows), list_tool_schemas(), call_tool, remember_tool_result):
+                while tool_results:
+                    item = tool_results.pop(0)
+                    draft = (item["result"] or {}).get("draft")
+                    if item["name"] == "create_course_draft" and draft:
+                        yield sse("draft", {"draft": draft})
                 answer.append(token)
                 yield sse("token", {"text": token})
             message = insert_chat_message(session_id, "assistant", "".join(answer).strip())

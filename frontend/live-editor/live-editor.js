@@ -483,6 +483,13 @@ send.addEventListener("click", async () => {
         renderMessageContent(assistant.content, answer);
         chatLog.scrollTop = chatLog.scrollHeight;
       }
+      if (event === "draft" && data.draft) {
+        renderDraftReview(data.draft);
+        viewer.src = `/api/agent/drafts/${data.draft.id}/preview`;
+        preview.href = `/api/agent/drafts/${data.draft.id}/preview`;
+        statusText.textContent = "Draft ready for review.";
+        setTab("review");
+      }
       if (event === "error") throw new Error(data.message || "Chat failed");
       if (event === "done") statusText.textContent = "Response saved.";
     });
