@@ -38,6 +38,8 @@ def test_live_editor_uses_external_assets():
 
     assert '<link rel="stylesheet" href="live-editor.css" />' in text
     assert '<script src="live-editor.js" defer></script>' in text
+    assert 'id="save-version"' in text
+    assert 'id="restore-version"' in text
     assert "<style>" not in text
     assert "<script>" not in text
 

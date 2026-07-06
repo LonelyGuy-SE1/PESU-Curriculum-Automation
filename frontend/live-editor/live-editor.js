@@ -1,6 +1,10 @@
 const semester = document.getElementById("semester");
 const course = document.getElementById("course");
 const viewMode = document.getElementById("view-mode");
+const versionName = document.getElementById("version-name");
+const saveVersion = document.getElementById("save-version");
+const versionSelect = document.getElementById("version-select");
+const restoreVersion = document.getElementById("restore-version");
 const preview = document.getElementById("preview");
 const viewer = document.getElementById("viewer");
 const loading = document.getElementById("loading");
@@ -77,6 +81,58 @@ function option(value, text) {
   item.value = value;
   item.textContent = text;
   return item;
+}
+
+function versionLabel(item) {
+  const year = item.academic_year ? ` ${item.academic_year}` : "";
+  return `${item.name}${year}`;
+}
+
+async function refreshVersions() {
+  const response = await fetch("/api/versions");
+  if (!response.ok) return;
+  const body = await response.json();
+  versionSelect.replaceChildren(...(body.versions || []).map((item) => option(String(item.id), versionLabel(item))));
+}
+
+async function saveCurrentVersion() {
+  const name = versionName.value.trim();
+  if (!name) {
+    statusText.textContent = "Version name is required.";
+    return;
+  }
+  saveVersion.disabled = true;
+  try {
+    statusText.textContent = "Saving full version...";
+    const response = await fetch("/api/versions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || "Version save failed");
+    versionName.value = "";
+    await refreshVersions();
+    versionSelect.value = String(body.version.id);
+    statusText.textContent = `Saved ${body.courses} courses.`;
+  } finally {
+    saveVersion.disabled = false;
+  }
+}
+
+async function restoreSelectedVersion() {
+  if (!versionSelect.value) return;
+  restoreVersion.disabled = true;
+  try {
+    statusText.textContent = "Restoring full version...";
+    const response = await fetch(`/api/versions/${versionSelect.value}/restore`, { method: "POST" });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || "Version restore failed");
+    if (activeCourseId) await loadCourse(activeCourseId);
+    statusText.textContent = `Restored ${body.courses_restored} courses. Archived ${body.courses_archived || 0}.`;
+  } finally {
+    restoreVersion.disabled = false;
+  }
 }
 
 function chatScopeQuery() {
@@ -541,6 +597,12 @@ viewMode.addEventListener("change", async () => {
 });
 attach.addEventListener("click", () => files.click());
 files.addEventListener("change", () => queueFiles(files.files));
+saveVersion.addEventListener("click", () => saveCurrentVersion().catch((error) => {
+  statusText.textContent = error instanceof Error ? error.message : "Version save failed.";
+}));
+restoreVersion.addEventListener("click", () => restoreSelectedVersion().catch((error) => {
+  statusText.textContent = error instanceof Error ? error.message : "Version restore failed.";
+}));
 
 chatSession.addEventListener("change", async () => {
   activeSessionId = chatSession.value;
@@ -740,7 +802,7 @@ const initialVersion = initialParams.get("version");
 const initialCourse = initialParams.get("course");
 const initialLoad = initialVersion && initialCourse ? loadVersionCourse(initialVersion, initialCourse) : firstAvailableSemester().then(loadSemester);
 
-initialLoad.catch(() => {
+Promise.all([refreshVersions(), initialLoad]).catch(() => {
   loading.classList.remove("active");
   statusText.textContent = "Backend unavailable.";
 });

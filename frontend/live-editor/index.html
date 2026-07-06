@@ -23,6 +23,13 @@
         <option value="course">Course Preview</option>
         <option value="document">Full Document</option>
       </select>
+      <label class="version-control">
+        Version
+        <input id="version-name" type="text" />
+      </label>
+      <button id="save-version" type="button">Save Version</button>
+      <select id="version-select" aria-label="Saved version"></select>
+      <button id="restore-version" type="button">Restore</button>
       <a id="preview" target="_blank" rel="noreferrer">Open</a>
       <span id="status"></span>
     </div>

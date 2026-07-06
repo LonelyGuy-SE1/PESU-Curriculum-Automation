@@ -4,7 +4,8 @@ from postgrest.exceptions import APIError
 
 from app.preview import build_course_preview
 from app.rendering import templates
-from app.services.curriculum import attach_submissions
+from app.services.curriculum import attach_submissions, update_refined_fields
+from app.services.diffing import diff_course
 from app.services.errors import database_http_exception
 from app.supabase import first_row, supabase
 
@@ -79,6 +80,55 @@ def create_version(payload: dict):
     except APIError as exc:
         raise database_http_exception(exc) from exc
     return {"version": version, "courses": len(courses)}
+
+
+@router.post("/versions/{version_id}/restore")
+def restore_version(version_id: int):
+    try:
+        version = _version(version_id)
+        rows = (
+            supabase.table("finalized_submissions")
+            .select("*")
+            .eq("curriculum_version_id", version_id)
+            .execute()
+            .data
+        )
+        version_refined_ids = [row["refined_id"] for row in rows]
+        current_rows = supabase.table("refined_submissions").select("*").execute().data
+        current = {row["id"]: build_course_preview(row) for row in attach_submissions(current_rows)}
+        current_status = {row["id"]: row.get("status") for row in current_rows}
+        extra_ids = [row["id"] for row in current_rows if row["id"] not in version_refined_ids]
+        history = []
+        restored = 0
+        for row in rows:
+            refined_id = int(row["refined_id"])
+            previous = current.get(refined_id)
+            restored_course = row["course_json"]
+            if not previous:
+                continue
+            if previous != restored_course:
+                summary = diff_course(previous, restored_course)
+                history.append(
+                    {
+                        "refined_id": refined_id,
+                        "source": "version_restore",
+                        "previous_json": previous,
+                        "next_json": restored_course,
+                        "json_patch": summary.pop("json_patch"),
+                        "diff_summary": summary,
+                        "change_reason": f"Restore version: {version['name']}",
+                    }
+                )
+            if previous != restored_course or current_status.get(refined_id) != "refined":
+                update_refined_fields(refined_id, {**restored_course, "status": "refined"})
+                restored += 1
+        if history:
+            supabase.table("course_revision_history").insert(history).execute()
+        if extra_ids:
+            supabase.table("refined_submissions").update({"status": "archived"}).in_("id", extra_ids).execute()
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
+    return {"message": "Version restored", "version": version, "courses_restored": restored, "courses_archived": len(extra_ids)}
 
 
 @router.get("/versions/{version_id}")
