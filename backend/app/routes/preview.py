@@ -41,7 +41,13 @@ def preview_course(refined_id: int):
 def download_all_pdf(download: bool = Query(False)):
     result = supabase.table("refined_submissions").select("*").neq("status", "archived").execute()
     courses = ordered_courses(result.data)
-    html = templates.get_template("jinja_sample.html").render(courses=courses, semester="", curriculum_year="2025-2026", asset_root="")
+    html = templates.get_template("jinja_sample.html").render(
+        courses=courses,
+        semester="",
+        curriculum_year="2025-2026",
+        asset_root="",
+        show_summaries=True,
+    )
     pdf = HTML(string=html, base_url=str(FRONTEND_DIR)).write_pdf()
     return pdf_response(pdf, "curriculum-preview.pdf", download)
 
@@ -50,7 +56,13 @@ def download_all_pdf(download: bool = Query(False)):
 def download_pdf(sem: int, download: bool = Query(False)):
     result = supabase.table("refined_submissions").select("*").neq("status", "archived").eq("semester", sem).order("id").execute()
     courses = ordered_courses(result.data)
-    html = templates.get_template("jinja_sample.html").render(courses=courses, semester=sem, curriculum_year="2025-2026", asset_root="")
+    html = templates.get_template("jinja_sample.html").render(
+        courses=courses,
+        semester=sem,
+        curriculum_year="2025-2026",
+        asset_root="",
+        show_summaries=True,
+    )
     pdf = HTML(string=html, base_url=str(FRONTEND_DIR)).write_pdf()
     return pdf_response(pdf, f"semester-{sem}.pdf", download)
 

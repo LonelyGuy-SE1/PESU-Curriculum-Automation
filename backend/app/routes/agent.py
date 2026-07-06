@@ -198,7 +198,13 @@ def preview_agent_document_draft(document_draft_id: int):
         (draft["proposed_json"] for draft in drafts),
         key=lambda course: (int(course.get("semester") or 0), str(course.get("course_code") or ""), str(course.get("course_title") or "")),
     )
-    html = templates.get_template("jinja_sample.html").render(courses=courses, semester="", curriculum_year="2025-2026", asset_root="/")
+    html = templates.get_template("jinja_sample.html").render(
+        courses=courses,
+        semester="",
+        curriculum_year="2025-2026",
+        asset_root="/",
+        show_summaries=True,
+    )
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 

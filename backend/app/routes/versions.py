@@ -189,5 +189,11 @@ def preview_version(version_id: int):
         (row["course_json"] for row in rows),
         key=lambda course: (int(course.get("semester") or 0), str(course.get("course_code") or ""), str(course.get("course_title") or "")),
     )
-    html = templates.get_template("jinja_sample.html").render(courses=courses, semester="", curriculum_year=version.get("academic_year") or CURRICULUM_YEAR, asset_root="/")
+    html = templates.get_template("jinja_sample.html").render(
+        courses=courses,
+        semester="",
+        curriculum_year=version.get("academic_year") or CURRICULUM_YEAR,
+        asset_root="/",
+        show_summaries=True,
+    )
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
