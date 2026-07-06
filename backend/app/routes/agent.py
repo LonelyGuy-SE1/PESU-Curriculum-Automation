@@ -34,6 +34,28 @@ def create_agent_draft(payload: AgentDraftPayload):
     return {"message": "Draft created", "draft": result.data[0]}
 
 
+@router.get("/agent/drafts")
+def list_agent_drafts():
+    try:
+        rows = supabase.table("agent_drafts").select("*").order("id", desc=True).limit(100).execute().data
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
+    return {
+        "drafts": [
+            {
+                "id": row["id"],
+                "refined_id": row["refined_id"],
+                "status": row.get("status") or "",
+                "course_title": (row.get("proposed_json") or {}).get("course_title") or "",
+                "course_code": (row.get("proposed_json") or {}).get("course_code") or "",
+                "change_reason": row.get("change_reason") or "",
+                "created_at": row.get("created_at") or "",
+            }
+            for row in rows
+        ]
+    }
+
+
 @router.get("/agent/drafts/{draft_id}")
 def get_agent_draft(draft_id: int):
     try:
@@ -129,6 +151,26 @@ def create_agent_document_draft(payload: AgentDocumentDraftPayload):
     except APIError as exc:
         raise database_http_exception(exc) from exc
     return {"message": "Document draft created", "document_draft": document, "drafts": drafts}
+
+
+@router.get("/agent/document-drafts")
+def list_agent_document_drafts():
+    try:
+        rows = supabase.table("agent_document_drafts").select("*").order("id", desc=True).limit(100).execute().data
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
+    return {
+        "document_drafts": [
+            {
+                "id": row["id"],
+                "status": row.get("status") or "",
+                "uploaded_document_id": row.get("uploaded_document_id") or "",
+                "change_reason": row.get("change_reason") or "",
+                "created_at": row.get("created_at") or "",
+            }
+            for row in rows
+        ]
+    }
 
 
 @router.get("/agent/document-drafts/{document_draft_id}")

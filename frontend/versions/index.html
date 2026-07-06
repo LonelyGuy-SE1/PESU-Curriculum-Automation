@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Curriculum Versions</title>
+    <link rel="stylesheet" href="versions.css" />
+    <script src="versions.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <div class="toolbar">
+          <select id="version" aria-label="Version"></select>
+          <select id="course" aria-label="Course"></select>
+          <button id="open-editor" type="button">Open Editor</button>
+          <a id="preview-link" target="_blank" rel="noreferrer">Preview</a>
+        </div>
+        <form class="snapshot" id="snapshot-form">
+          <label>
+            Version Name
+            <input id="version-name" name="name" type="text" required />
+          </label>
+          <label>
+            Academic Year
+            <input id="academic-year" name="academic_year" type="text" />
+          </label>
+          <button type="submit">Save Current Version</button>
+        </form>
+        <div id="status"></div>
+      </section>
+      <iframe id="viewer" title="Version preview"></iframe>
+    </main>
+  </body>
+</html>

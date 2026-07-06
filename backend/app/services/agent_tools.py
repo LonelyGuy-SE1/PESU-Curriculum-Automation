@@ -91,7 +91,7 @@ def _get_preview_url(arguments: dict) -> dict:
 
 
 def _list_courses(arguments: dict) -> dict:
-    query = supabase.table("refined_submissions").select("id,semester,course_code,course_title")
+    query = supabase.table("refined_submissions").select("id,semester,course_code,course_title").neq("status", "archived")
     if arguments.get("semester") is not None:
         query = query.eq("semester", int(arguments["semester"]))
     rows = query.execute().data

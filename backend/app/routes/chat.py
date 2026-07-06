@@ -123,10 +123,28 @@ def create_chat_session(payload: ChatSessionPayload):
     return {"session": result.data[0]}
 
 
+@router.get("/chat/sessions")
+def list_chat_sessions(refined_id: int | None = None, document_draft_id: int | None = None):
+    query = supabase.table("chat_sessions").select("*").eq("status", "active")
+    if refined_id is not None:
+        query = query.eq("refined_id", refined_id)
+    if document_draft_id is not None:
+        query = query.eq("document_draft_id", document_draft_id)
+    rows = query.order("id", desc=True).limit(50).execute().data
+    return {"sessions": rows}
+
+
 @router.get("/chat/sessions/{session_id}/messages")
 def get_chat_messages(session_id: int):
     load_chat_session(session_id)
     return {"messages": chat_messages(session_id)}
+
+
+@router.delete("/chat/sessions/{session_id}")
+def clear_chat_session(session_id: int):
+    load_chat_session(session_id)
+    supabase.table("chat_sessions").update({"status": "archived"}).eq("id", session_id).execute()
+    return {"message": "Chat cleared"}
 
 
 @router.post("/chat/sessions/{session_id}/messages")

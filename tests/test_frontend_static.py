@@ -18,6 +18,14 @@ def test_live_editor_script_parses():
     subprocess.run([node, "-e", script], check=True)
 
 
+def test_versions_script_parses():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    script = "new Function(require('fs').readFileSync('frontend/versions/versions.js', 'utf8'));"
+    subprocess.run([node, "-e", script], check=True)
+
+
 def test_live_editor_uses_safe_message_rendering():
     text = LIVE_EDITOR_JS.read_text()
 
@@ -30,6 +38,8 @@ def test_live_editor_uses_external_assets():
 
     assert '<link rel="stylesheet" href="live-editor.css" />' in text
     assert '<script src="live-editor.js" defer></script>' in text
+    assert 'id="save-version"' in text
+    assert 'id="restore-version"' in text
     assert "<style>" not in text
     assert "<script>" not in text
 
@@ -47,15 +57,18 @@ def test_frontend_pages_are_foldered():
     assert Path("frontend/form/index.html").exists()
     assert Path("frontend/preview/index.html").exists()
     assert Path("frontend/live-editor/index.html").exists()
+    assert Path("frontend/versions/index.html").exists()
     assert Path("frontend/form/form.js").exists()
     assert Path("frontend/preview/preview.js").exists()
     assert Path("frontend/live-editor/live-editor.js").exists()
+    assert Path("frontend/versions/versions.js").exists()
 
 
 def test_old_frontend_urls_redirect():
     assert 'content="0;url=form/"' in Path("frontend/form.html").read_text()
     assert 'content="0;url=preview/"' in Path("frontend/preview.html").read_text()
     assert 'content="0;url=live-editor/"' in Path("frontend/live-editor.html").read_text()
+    assert 'content="0;url=versions/"' in Path("frontend/versions.html").read_text()
 
 
 def test_dockerfile_copies_frontend_site():
@@ -81,6 +94,7 @@ def test_frontend_routes_mount(monkeypatch):
         "/form/": "Course Submission",
         "/preview/": "Curriculum Preview",
         "/live-editor/": "Live Editor",
+        "/versions/": "Curriculum Versions",
     }
 
     for path, title in expected.items():
