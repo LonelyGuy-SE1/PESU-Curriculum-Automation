@@ -13,21 +13,18 @@
         <div class="toolbar">
           <select id="version" aria-label="Version"></select>
           <select id="course" aria-label="Course"></select>
+          <button id="preview-version" type="button">Preview Version</button>
           <button id="open-editor" type="button">Open Editor</button>
-          <a id="preview-link" target="_blank" rel="noreferrer">Preview</a>
+          <a class="button-link" id="preview-link" target="_blank" rel="noreferrer">Open Preview</a>
         </div>
         <form class="snapshot" id="snapshot-form">
           <label>
-            Version Name
+            Snapshot Label
             <input id="version-name" name="name" type="text" required />
           </label>
-          <label>
-            Academic Year
-            <input id="academic-year" name="academic_year" type="text" />
-          </label>
-          <button type="submit">Save Current Version</button>
+          <button class="primary" type="submit">Save Current Curriculum</button>
         </form>
-        <div id="status"></div>
+        <div class="status-line" id="status"></div>
       </section>
       <iframe id="viewer" title="Version preview"></iframe>
     </main>

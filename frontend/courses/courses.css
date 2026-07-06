@@ -1,0 +1,130 @@
+@import "../shared.css";
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--page-bg);
+  color: var(--text);
+  font-family: Arial, sans-serif;
+}
+
+.shell {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.topbar,
+.panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+}
+
+h1 {
+  margin: 0;
+  color: var(--pesu-blue);
+  font-size: 22px;
+}
+
+p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.actions,
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.filters {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filters input {
+  flex: 1;
+}
+
+#status {
+  margin-left: auto;
+}
+
+.table-wrap {
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  font-size: 14px;
+}
+
+th {
+  color: var(--pesu-blue);
+  background: #f8fafc;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.course-row {
+  cursor: pointer;
+}
+
+.course-row:hover {
+  background: #f8fafc;
+}
+
+.details {
+  display: grid;
+  gap: 8px;
+  color: #374151;
+  line-height: 1.45;
+}
+
+.details strong {
+  color: var(--pesu-blue);
+}
+
+.empty {
+  padding: 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .topbar,
+  .actions,
+  .filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  #status {
+    margin-left: 0;
+  }
+}

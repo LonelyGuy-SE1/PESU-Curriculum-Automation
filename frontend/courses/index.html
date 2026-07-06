@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Course Management</title>
+    <link rel="stylesheet" href="courses.css" />
+    <script src="courses.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>Course Management</h1>
+          <p>Manage refined courses used by preview, editor, and versions.</p>
+        </div>
+        <div class="actions">
+          <a class="button-link" href="../form/">Add Course</a>
+          <a class="button-link" href="../live-editor/">Live Editor</a>
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="filters">
+          <select id="semester" aria-label="Semester">
+            <option value="">All semesters</option>
+            <option value="1">Semester 1</option>
+            <option value="2">Semester 2</option>
+            <option value="3">Semester 3</option>
+            <option value="4">Semester 4</option>
+            <option value="5">Semester 5</option>
+            <option value="6">Semester 6</option>
+            <option value="7">Semester 7</option>
+            <option value="8">Semester 8</option>
+          </select>
+          <input id="search" type="search" aria-label="Search courses" />
+          <span class="status-line" id="status"></span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Semester</th>
+                <th>Code</th>
+                <th>Course</th>
+                <th>Credits</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="course-table"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

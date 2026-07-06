@@ -6,7 +6,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from postgrest.exceptions import APIError
 
-from app.models.chat import ChatMessagePayload, ChatSessionPayload
+from app.models.chat import ChatMessagePayload, ChatSessionPayload, ChatSessionTitlePayload
 from app.services.agent_tools import call_tool, list_tool_schemas
 from app.services.attachments import extract_text
 from app.services.curriculum import load_document_draft, refined_course
@@ -79,20 +79,28 @@ def stable_context(value: dict) -> str:
 
 
 def chat_system_prompt(session: dict) -> str:
+    session_id = session.get("id")
     context = ""
     if session.get("refined_id"):
         course = refined_course(int(session["refined_id"]))
-        context = stable_context({"active_refined_id": session["refined_id"], "active_course": course})
+        context = stable_context({"active_session_id": session_id, "active_refined_id": session["refined_id"], "active_course": course})
     elif session.get("document_draft_id"):
-        context = stable_context(load_document_draft(int(session["document_draft_id"])))
+        context = stable_context({"active_session_id": session_id, **load_document_draft(int(session["document_draft_id"]))})
+    else:
+        context = stable_context({"active_session_id": session_id})
     return f"""You are the PESU Curriculum Automation live editor assistant.
 Be concise, practical, and specific to the active curriculum data.
-You can propose edits by creating human-reviewable drafts with the available tools.
+Use tools when the user asks to inspect, compare, or change curriculum data.
 When the user asks to change the active course, call create_course_draft with the active_refined_id, only the fields that should change, and a short reason.
+When the user asks for changes across multiple courses or an uploaded document, inspect the curriculum or attachment text, then call create_document_draft with the affected courses.
+When the user asks what changed, call diff_course_json or read the relevant draft before answering.
+Create reviewable drafts without asking for extra confirmation when the requested change is clear. Human approval happens when the user applies the draft.
+For broad document requests, use get_curriculum_json to inspect the whole syllabus before proposing edits.
 Never apply a draft, never claim a draft was applied, and never claim the refined database was changed.
 After creating a draft, tell the user to review the diff in the Review panel before applying it.
 If the user asks for an unsafe or unclear edit, ask for the missing detail instead of guessing.
 Do not change deterministic fields such as program, hours, credits, or course type.
+Describe edits as reviewable drafts that a human can apply.
 
 Active context:
 {context or "No active course or document draft is selected."}"""
@@ -143,8 +151,15 @@ def get_chat_messages(session_id: int):
 @router.delete("/chat/sessions/{session_id}")
 def clear_chat_session(session_id: int):
     load_chat_session(session_id)
-    supabase.table("chat_sessions").update({"status": "archived"}).eq("id", session_id).execute()
-    return {"message": "Chat cleared"}
+    supabase.table("chat_sessions").delete().eq("id", session_id).execute()
+    return {"message": "Chat deleted"}
+
+
+@router.patch("/chat/sessions/{session_id}")
+def rename_chat_session(session_id: int, payload: ChatSessionTitlePayload):
+    load_chat_session(session_id)
+    row = supabase.table("chat_sessions").update({"title": payload.title}).eq("id", session_id).execute().data[0]
+    return {"message": "Chat renamed", "session": row}
 
 
 @router.post("/chat/sessions/{session_id}/messages")
@@ -162,6 +177,16 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
         def remember_tool_result(name: str, result: dict) -> None:
             tool_results.append({"name": name, "result": result})
 
+        def flush_tool_results():
+            while tool_results:
+                item = tool_results.pop(0)
+                draft = (item["result"] or {}).get("draft")
+                document_draft = (item["result"] or {}).get("document_draft")
+                if item["name"] == "create_course_draft" and draft:
+                    yield sse("draft", {"draft": draft})
+                if item["name"] == "create_document_draft" and document_draft:
+                    yield sse("document_draft", {"document_draft": document_draft})
+
         try:
             yield sse("status", {"message": "Message saved"})
             rows = chat_messages(session_id)
@@ -169,19 +194,23 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
             system = chat_system_prompt(session)
             yield sse("status", {"message": "Streaming response"})
             for token in stream_chat(system, model_messages(session_id, rows), list_tool_schemas(), call_tool, remember_tool_result):
-                while tool_results:
-                    item = tool_results.pop(0)
-                    draft = (item["result"] or {}).get("draft")
-                    if item["name"] == "create_course_draft" and draft:
-                        yield sse("draft", {"draft": draft})
+                yield from flush_tool_results()
                 answer.append(token)
                 yield sse("token", {"text": token})
+            yield from flush_tool_results()
             message = insert_chat_message(session_id, "assistant", "".join(answer).strip())
             yield sse("done", {"message_id": message["id"]})
         except OpenRouterError as exc:
-            logger.warning("Chat model request failed for session %s: status=%s", session_id, exc.status_code)
+            yield from flush_tool_results()
+            logger.warning(
+                "Chat model request failed for session %s: status=%s detail=%s",
+                session_id,
+                exc.status_code,
+                exc.provider_message[:300],
+            )
             yield sse("error", {"message": exc.message})
         except Exception as exc:
+            yield from flush_tool_results()
             logger.exception("Chat stream failed for session %s", session_id)
             sentry_sdk.capture_exception(exc)
             yield sse("error", {"message": "An internal error occurred. Please try again later."})

@@ -1,3 +1,5 @@
+@import "../shared.css";
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -5,18 +7,12 @@
 }
 
 :root {
-  --bg: #f0f2f5;
-  --surface: #ffffff;
-  --border: #d4d8dd;
-  --text: #00377b;
+  --bg: var(--page-bg);
+  --text: var(--pesu-blue);
   --text-secondary: #5a6b8a;
-  --accent: #ff6c00;
+  --accent: var(--pesu-orange);
   --accent-hover: #e05e00;
   --optional: #8a9bb5;
-  --success: #166534;
-  --success-bg: #f0fdf4;
-  --error: #991b1b;
-  --error-bg: #fef2f2;
 }
 
 body {
@@ -79,13 +75,8 @@ label {
 
 input, select, textarea {
   width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.875rem;
   font-family: inherit;
-  background: var(--surface);
-  color: var(--text);
+  background-color: var(--surface);
   transition: border-color 0.15s;
 }
 

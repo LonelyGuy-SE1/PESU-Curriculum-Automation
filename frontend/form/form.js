@@ -26,7 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
         result.textContent = msgs.join("\n");
         result.className = "error";
       } else {
-        result.textContent = "Submission received.";
+        result.textContent = "Submission received. It will appear in Course Management after refinement completes.";
         result.className = "success";
       }
     } catch {

@@ -14,13 +14,17 @@ logger = logging.getLogger(__name__)
 
 
 class OpenRouterError(RuntimeError):
-    def __init__(self, status_code: int, retry_after: str | None = None):
+    def __init__(self, status_code: int, retry_after: str | None = None, message: str | None = None, provider_message: str = ""):
         self.status_code = status_code
         self.retry_after = retry_after
+        self._message = message
+        self.provider_message = provider_message
         super().__init__(self.message)
 
     @property
     def message(self) -> str:
+        if self._message:
+            return self._message
         if self.status_code in {429, 503}:
             if self.retry_after:
                 return f"Model provider is rate limited. Try again in {self.retry_after} seconds."
@@ -38,16 +42,47 @@ def _headers() -> dict:
 
 def _message_content(data: dict) -> str:
     try:
-        return data["choices"][0]["message"]["content"].strip()
-    except (KeyError, IndexError, TypeError, AttributeError) as exc:
-        raise RuntimeError(f"OpenRouter response missing assistant message: {data.get('error') or data}") from exc
+        return _assistant_message(data)["content"].strip()
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise OpenRouterError(502, message="Model provider returned an invalid response. Please try again later.", provider_message=str(data.get("error") or data)[:500]) from exc
 
 
 def _raise_for_status(response) -> None:
     try:
         response.raise_for_status()
     except HTTPStatusError as exc:
-        raise OpenRouterError(exc.response.status_code, exc.response.headers.get("retry-after")) from exc
+        raise OpenRouterError(
+            exc.response.status_code,
+            exc.response.headers.get("retry-after"),
+            provider_message=exc.response.text[:500],
+        ) from exc
+
+
+def _provider_error(data: dict) -> str:
+    error = data.get("error") if isinstance(data, dict) else None
+    if isinstance(error, dict):
+        return str(error.get("message") or error)
+    return str(error or data)[:500]
+
+
+def _public_shape_error(provider_message: str) -> str:
+    lowered = provider_message.lower()
+    if "tool" in lowered and ("support" in lowered or "unsupported" in lowered):
+        return "The selected model does not support editor tools. Switch to a tool-calling model and try again."
+    if "rate" in lowered or "quota" in lowered:
+        return "Model provider is rate limited. Please try again shortly."
+    return "Model provider returned an invalid response. Please try again later."
+
+
+def _assistant_message(data: dict) -> dict:
+    try:
+        message = data["choices"][0]["message"]
+    except (KeyError, IndexError, TypeError) as exc:
+        provider_message = _provider_error(data)
+        raise OpenRouterError(502, message=_public_shape_error(provider_message), provider_message=provider_message) from exc
+    if not isinstance(message, dict):
+        raise OpenRouterError(502, message="Model provider returned an invalid response. Please try again later.", provider_message=str(message)[:500])
+    return message
 
 
 def call(system: str, user: str) -> dict:
@@ -59,8 +94,6 @@ def call(system: str, user: str) -> dict:
         )
         _raise_for_status(r)
         data = r.json()
-        if "choices" not in data:
-            raise RuntimeError(f"OpenRouter response missing choices: {data.get('error') or data}")
         text = _message_content(data)
         text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         return json.loads(text)
@@ -114,10 +147,7 @@ def _chat_message(messages: list[dict], tools: list[dict]) -> dict:
     with Client(timeout=120) as client:
         response = client.post(URL, headers=_headers(), json={"model": MODEL, "messages": messages, "tools": tools})
         _raise_for_status(response)
-        try:
-            return response.json()["choices"][0]["message"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError("OpenRouter response missing assistant message") from exc
+        return _assistant_message(response.json())
 
 
 def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_tool_result=None) -> str:

@@ -1,11 +1,7 @@
 import json
-import re
 
+from app.services.books import parse_books
 from app.services.deterministic import compute_course_type, compute_hours, compute_program
-
-BOOK_ITEM = re.compile(r"\s+(?=\d+[.)]\s+)")
-BOOK_START = re.compile(r"^\s*\d+[.)]\s*(.+)$")
-BOOK_SPLIT = re.compile(r"(?<=\d{4}\.)\s+(?=[\"\u201c])")
 
 
 def _lines(value) -> list[str]:
@@ -14,24 +10,6 @@ def _lines(value) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     return [line.strip() for line in str(value).splitlines() if line.strip()]
-
-
-def _books(value) -> list[str]:
-    books = []
-    for line in _lines(value):
-        for item in BOOK_ITEM.split(line):
-            for part in BOOK_SPLIT.split(item):
-                part = part.strip()
-                if not part:
-                    continue
-                match = BOOK_START.match(part)
-                if match:
-                    books.append(match.group(1).strip())
-                elif books and part == item:
-                    books[-1] = f"{books[-1]} {part}".strip()
-                else:
-                    books.append(part)
-    return books
 
 
 def _content(row: dict) -> dict:
@@ -95,6 +73,6 @@ def build_course_preview(row: dict) -> dict:
         "course_outcomes": _lines(row.get("course_outcomes") or content.get("course_outcomes"))[:4],
         "units": row.get("units") or content.get("units") or [],
         "lab_experiments": _lines(row.get("lab_experiments") or content.get("lab_experiments"))[:10] if practical_hours else [],
-        "text_books": _books(row.get("text_books") or content.get("text_books")) or _books(submission.get("text_books")),
-        "reference_books": _books(row.get("reference_books") or content.get("reference_books")) or _books(submission.get("reference_books")),
+        "text_books": parse_books(row.get("text_books") or content.get("text_books")) or parse_books(submission.get("text_books")),
+        "reference_books": parse_books(row.get("reference_books") or content.get("reference_books")) or parse_books(submission.get("reference_books")),
     }

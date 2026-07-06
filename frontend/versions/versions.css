@@ -1,3 +1,5 @@
+@import "../shared.css";
+
 * {
   box-sizing: border-box;
 }
@@ -27,13 +29,13 @@ body {
 .toolbar,
 .snapshot {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) auto auto;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr) auto auto auto;
   gap: 10px;
   align-items: center;
 }
 
 .snapshot {
-  grid-template-columns: minmax(160px, 1fr) minmax(140px, 220px) auto;
+  grid-template-columns: minmax(220px, 1fr) auto;
 }
 
 select,
@@ -43,7 +45,7 @@ a {
   height: 34px;
   border: 1px solid #9ca3af;
   border-radius: 4px;
-  background: #fff;
+  background-color: #fff;
   color: #111827;
   font-size: 14px;
 }
@@ -59,7 +61,6 @@ label {
 select,
 input {
   min-width: 0;
-  padding: 0 8px;
 }
 
 button,
@@ -73,15 +74,13 @@ a {
 }
 
 button {
-  background: #00377b;
+  background-color: #00377b;
   border-color: #00377b;
-  color: #fff;
+  color: #ffffff;
 }
 
 #status {
-  min-height: 18px;
-  color: #4b5563;
-  font-size: 13px;
+  width: fit-content;
 }
 
 iframe {

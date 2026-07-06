@@ -1,6 +1,7 @@
 import re
 
 from app.supabase import first_row, supabase
+from app.services.books import parse_books, raw_book_section
 from app.services.deterministic import compute_hours, compute_program, compute_course_type
 from app.services.openrouter import call as llm
 
@@ -8,14 +9,7 @@ WORD = re.compile(r"\w+")
 UNIT_LINE = re.compile(r"\b(Unit\s+\d+|Module\s+(?:\d+|[IVX]+))\s*[:.-]?\s*(.*)$", re.IGNORECASE)
 HOURS_SUFFIX = re.compile(r"\s*\b\d+\s+Hours?\b\s*$", re.IGNORECASE)
 DESIRABLE_LINE = re.compile(r"\bDesirable\s+([^\n]+)", re.IGNORECASE)
-BOOK_ENTRY = re.compile(r"(?:^|\n)\s*\d+[:.)]\s*")
-BOOK_INLINE_ENTRY = re.compile(r"\s+(?=\d+[:.)]\s+(?:[\"\u201cA-Z]))")
-BOOK_LABEL = re.compile(r"(?im)^\s*(?:Text\s*)?Book\(s\):\s*|^\s*Reference\s*(?:Book\(s\):)?\s*")
-BOOK_STOP = re.compile(
-    r"\bCourse\b[\s\S]{0,120}\bOutcome\b|"
-    r"\b(Course\s+Objectives?|Assignment\s*/|Laboratory|Recommended\s+Materials)\b",
-    re.IGNORECASE,
-)
+COURSE_CODE = re.compile(r"\bCourse\s+Code\s*:?\s*([A-Z0-9]+)", re.IGNORECASE)
 PAGE_NOISE = re.compile(
     r"P\.?\s*E\.?\s*S\.?\s*University|"
     r"Curriculum|"
@@ -23,10 +17,6 @@ PAGE_NOISE = re.compile(
     r"\b\d+\s*\|\s*Page\b",
     re.IGNORECASE,
 )
-ORDINAL_LINE = re.compile(r"(?im)^\s*(st|nd|rd|th)\s*$")
-TEXT_BOOK_LINE = re.compile(r"\bText\s+Book\(s\):", re.IGNORECASE)
-REFERENCE_LINE = re.compile(r"^\s*Reference\b", re.IGNORECASE)
-SECTION_END_LINE = re.compile(r"^\s*(Course\s+Outcome|Assignment\s*/|Course\s+Objectives?|Laboratory)\b", re.IGNORECASE)
 
 SYS = """You refine PES University course submissions for the UG curriculum template.
 Return only valid JSON. No markdown. No commentary.
@@ -153,75 +143,12 @@ def _clean_noise(value: str) -> str:
     return re.sub(r"\s+", " ", PAGE_NOISE.sub(" ", value)).strip()
 
 
-def _book_text(values) -> str:
-    parts = []
-    for value in values:
-        if not value:
-            continue
-        if isinstance(value, list):
-            parts.extend(str(item) for item in value if str(item).strip())
-        else:
-            parts.append(str(value))
-    text = "\n".join(parts)
-    match = BOOK_STOP.search(text)
-    if match:
-        text = text[: match.start()]
-    text = ORDINAL_LINE.sub("", text)
-    text = BOOK_LABEL.sub("", text)
-    return PAGE_NOISE.sub("\n", text)
-
-
 def _books(*values) -> list[str]:
-    text = _book_text(values)
-    if not text.strip():
-        return []
-
-    parts = BOOK_ENTRY.split(text)
-    if len(parts) > 1:
-        parts = parts[1:] if not parts[0].strip() else parts
-    else:
-        parts = BOOK_INLINE_ENTRY.split(text)
-
-    books = []
-    seen = set()
-    for part in parts:
-        item = _clean_noise(BOOK_LABEL.sub("", part))
-        item = re.sub(r"\bBook\(s\):\s*", "", item, flags=re.IGNORECASE).strip(" :")
-        if not item:
-            continue
-        if books and (item.startswith("(") or (_words(item) <= 3 and not re.search(r"\b\d{4}\b", item))):
-            books[-1] = f"{books[-1]} {item}".strip()
-            seen = {re.sub(r"[^a-z0-9]+", " ", book.lower()).strip() for book in books}
-            continue
-        key = re.sub(r"[^a-z0-9]+", " ", item.lower()).strip()
-        if key not in seen:
-            books.append(item)
-            seen.add(key)
-    return books
+    return parse_books(*values)
 
 
 def _raw_book_section(raw_content: str, kind: str) -> str:
-    lines = (raw_content or "").splitlines()
-    start = None
-    for index, line in enumerate(lines):
-        if kind == "text" and TEXT_BOOK_LINE.search(line):
-            start = index
-            break
-        if kind == "reference" and REFERENCE_LINE.search(line):
-            start = index
-            break
-    if start is None:
-        return ""
-
-    end = len(lines)
-    for index in range(start + 1, len(lines)):
-        if kind == "text" and REFERENCE_LINE.search(lines[index]):
-            end = index
-            break
-        if SECTION_END_LINE.search(lines[index]):
-            end = index
-            break
-    return "\n".join(lines[start:end])
+    return raw_book_section(raw_content, kind)
 
 
 def _words(text: str) -> int:
@@ -393,38 +320,64 @@ def _text(*values) -> str:
     return ""
 
 
+def _course_code(raw_content: str) -> str:
+    match = COURSE_CODE.search(raw_content or "")
+    return match.group(1).upper() if match else ""
+
+
 def _prior_course_titles(sub: dict) -> list[str]:
     semester = int(sub["semester"])
     if semester <= 1:
         return []
     rows = (
         supabase.table("refined_submissions")
-        .select("submission_id,course_title,semester")
+        .select("submission_id,course_code,course_title,semester")
         .lt("semester", semester)
         .order("semester")
         .execute()
         .data
     )
     ids = [row["submission_id"] for row in rows if row.get("submission_id")]
-    submissions = supabase.table("submissions").select("id,target_department").in_("id", ids).execute().data if ids else []
+    submissions = supabase.table("submissions").select("id,target_department,raw_course_content").in_("id", ids).execute().data if ids else []
     departments = {row["id"]: row.get("target_department") for row in submissions}
+    raw_codes = {row["id"]: _course_code(row.get("raw_course_content") or "") for row in submissions}
     titles = []
     for row in rows:
         if departments.get(row.get("submission_id")) != sub.get("target_department"):
             continue
         title = str(row.get("course_title") or "").strip()
-        if title and title not in titles:
-            titles.append(title)
+        code = str(row.get("course_code") or raw_codes.get(row.get("submission_id")) or "").strip()
+        label = f"{code} - {title}" if code else title
+        if title and label not in titles:
+            titles.append(label)
     return titles
 
 
+def _normalized(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _singularized(text: str) -> str:
+    return " ".join(word[:-1] if len(word) > 3 and word.endswith("s") else word for word in _normalized(text).split())
+
+
+def _core_key(text: str) -> str:
+    skip = {"a", "an", "and", "for", "in", "its", "of", "the", "to", "with"}
+    return " ".join(word for word in _singularized(text).split() if word not in skip)
+
+
+def _prior_keys(course: str) -> list[str]:
+    match = re.match(r"\s*([A-Z]{2}\d{2}[A-Z0-9]+)\s*[-:]\s*(.+)", course)
+    code = match.group(1).lower() if match else ""
+    title = match.group(2) if match else course
+    return [key for key in (code, _normalized(title), _singularized(title), _core_key(title)) if key]
+
+
 def _prior_matches(text: str, prior_courses: list[str]) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
-    matches = [
-        course
-        for course in prior_courses
-        if re.sub(r"[^a-z0-9]+", " ", course.lower()).strip() in normalized
-    ]
+    normalized = _normalized(text)
+    singularized = _singularized(text)
+    core = _core_key(text)
+    matches = [course for course in prior_courses if any(key in normalized or key in singularized or key in core for key in _prior_keys(course))]
     return ", ".join(matches)
 
 
@@ -467,7 +420,7 @@ def build_refined_payload(sub: dict, out: dict, prior_courses: list[str] | None 
     return {
         "submission_id": sub["id"],
         "semester": int(sub["semester"]),
-        "course_code": "",
+        "course_code": _course_code(raw_content),
         "course_title": _text(out.get("course_title"), sub["course_title"]),
         "program": compute_program(sub["target_department"]),
         "course_type": compute_course_type(sub["credit_category"]),

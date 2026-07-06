@@ -1,4 +1,4 @@
-from app.services.refinement import _books, _units_from_course_contents, build_refined_payload
+from app.services.refinement import _books, _course_code, _prior_matches, _units_from_course_contents, build_refined_payload
 
 
 def test_units_are_read_from_course_contents():
@@ -24,6 +24,47 @@ def test_books_remove_page_noise_and_numbering():
     assert books == ["First Book, 2024.", "Second Book, 2025."]
 
 
+def test_books_stop_before_course_outcome_and_remove_split_labels():
+    books = _books(
+        """
+Reference             1. "Digital Design & Computer Architecture", David Money Harris, Sarah L. Harris, 2nd
+Book(s):              Edition, Elsevier, 2013.
+                      2. "Computer Organization and Design", David A. Patterson, John L. Hennessey 5th Edition,
+                      Elsevier, 2013.
+
+Course                     • Perform analysis of digital logic circuits.
+Outcome                    • Design control logic using finite state machines.
+"""
+    )
+
+    assert books == [
+        '"Digital Design & Computer Architecture", David Money Harris, Sarah L. Harris, 2nd Edition, Elsevier, 2013.',
+        '"Computer Organization and Design", David A. Patterson, John L. Hennessey 5th Edition, Elsevier, 2013.',
+    ]
+
+
+def test_books_remove_inline_split_label():
+    books = _books("1. TinyML Cookbook: Combine artificial intelligence and ultra- Book(s) low-power embedded devices, 2022.")
+
+    assert books == ["TinyML Cookbook: Combine artificial intelligence and ultra-low-power embedded devices, 2022."]
+
+
+def test_prior_matches_only_existing_courses():
+    prior = [
+        "UE24CS241B - Design and Analysis of Algorithms",
+        "UE24CS252A - Data Structures and Applications",
+        "UE24CS252B - Computer Networks",
+    ]
+
+    matched = _prior_matches("Design and Analysis of Algorithm, Data Structures & Its Applications, Machine Intelligence", prior)
+
+    assert matched == "UE24CS241B - Design and Analysis of Algorithms, UE24CS252A - Data Structures and Applications"
+
+
+def test_course_code_is_read_from_raw_content():
+    assert _course_code("Course Code: UE23CS342BB12\nCourse Title: SOC") == "UE23CS342BB12"
+
+
 def test_refined_payload_keeps_deterministic_fields_and_four_units():
     sub = {
         "id": 10,
@@ -32,6 +73,7 @@ def test_refined_payload_keeps_deterministic_fields_and_four_units():
         "target_department": "CSE",
         "credit_category": "5",
         "raw_course_content": """
+Course Code: UE24CS252A
 Unit 1: Lists - linked lists. 14 Hours
 Unit 2: Stacks - stacks. 14 Hours
 Unit 3: Trees - trees. 14 Hours
@@ -52,6 +94,7 @@ Unit 4: Graphs - graphs. 14 Hours
     payload = build_refined_payload(sub, out, [])
 
     assert payload["program"] == "B. TECH"
+    assert payload["course_code"] == "UE24CS252A"
     assert payload["credits"] == 5
     assert payload["course_type"] == "Core Course-Lab Integrated"
     assert len(payload["units"]) == 4

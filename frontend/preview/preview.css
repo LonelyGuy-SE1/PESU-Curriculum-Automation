@@ -1,3 +1,5 @@
+@import "../shared.css";
+
 * {
   box-sizing: border-box;
 }
@@ -25,13 +27,13 @@ a {
   height: 34px;
   border: 1px solid #9ca3af;
   border-radius: 4px;
-  background: #fff;
+  background-color: #fff;
   color: #111827;
   font-size: 14px;
 }
 
 select {
-  padding: 0 8px;
+  min-width: 150px;
 }
 
 a {
@@ -43,8 +45,6 @@ a {
 
 #status {
   margin-left: auto;
-  color: #4b5563;
-  font-size: 14px;
 }
 
 iframe {

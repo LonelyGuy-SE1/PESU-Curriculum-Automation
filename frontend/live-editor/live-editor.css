@@ -1,3 +1,5 @@
+@import "../shared.css";
+
 * {
   box-sizing: border-box;
 }
@@ -16,11 +18,24 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  min-height: 52px;
-  padding: 8px 12px;
+  gap: 8px;
+  min-height: 56px;
+  padding: 10px 12px;
   background: #fff;
   border-bottom: 1px solid #d1d5db;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 8px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.toolbar-group:last-of-type {
+  border-right: 0;
 }
 
 select,
@@ -30,14 +45,14 @@ a {
   height: 34px;
   border: 1px solid #9ca3af;
   border-radius: 4px;
-  background: #fff;
+  background-color: #fff;
   color: #111827;
   font-size: 14px;
 }
 
 select {
-  min-width: 140px;
-  padding: 0 8px;
+  min-width: 150px;
+  max-width: 280px;
 }
 
 input {
@@ -45,14 +60,24 @@ input {
   padding: 0 8px;
 }
 
-.version-control {
-  display: grid;
-  grid-template-columns: auto minmax(160px, 220px);
-  align-items: center;
-  gap: 6px;
-  color: #00377b;
-  font-size: 12px;
-  font-weight: 700;
+.course-controls {
+  flex: 1 1 520px;
+}
+
+.course-controls #course {
+  flex: 1 1 240px;
+}
+
+.version-controls {
+  flex: 0 1 620px;
+}
+
+.version-controls input {
+  flex: 1 1 160px;
+}
+
+.version-controls select {
+  flex: 1 1 200px;
 }
 
 button,
@@ -78,13 +103,36 @@ button:disabled {
 
 #status {
   margin-left: auto;
-  color: #4b5563;
-  font-size: 14px;
+  max-width: 360px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #374151;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#status.error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+#status.ready {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
 }
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 390px;
+  grid-template-columns: minmax(0, 1fr) 430px;
   gap: 12px;
   min-height: 0;
   padding: 12px;
@@ -94,7 +142,9 @@ button:disabled {
 .side-pane {
   min-height: 0;
   border: 1px solid #d1d5db;
+  border-radius: 6px;
   background: #fff;
+  overflow: hidden;
 }
 
 .preview-pane {
@@ -163,7 +213,7 @@ iframe {
 
 .thread-bar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto auto auto;
   gap: 8px;
   padding: 10px;
   border-bottom: 1px solid #d1d5db;
@@ -188,6 +238,11 @@ iframe {
   font-size: 14px;
   line-height: 1.4;
   white-space: pre-wrap;
+}
+
+.message.error {
+  border-color: #fecaca;
+  background: #fef2f2;
 }
 
 .message.user {
@@ -341,7 +396,7 @@ iframe {
 
 .draft-loader {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px;
+  grid-template-columns: minmax(0, 1fr) 118px;
   gap: 8px;
 }
 
@@ -426,8 +481,20 @@ iframe {
     flex-wrap: wrap;
   }
 
+  .toolbar-group {
+    width: 100%;
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  .course-controls,
+  .version-controls {
+    flex-wrap: wrap;
+  }
+
   #status {
     width: 100%;
+    max-width: none;
     margin-left: 0;
   }
 
@@ -439,5 +506,9 @@ iframe {
   .preview-pane,
   .side-pane {
     height: 72dvh;
+  }
+
+  .thread-bar {
+    grid-template-columns: 1fr;
   }
 }

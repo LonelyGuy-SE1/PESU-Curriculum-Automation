@@ -1,0 +1,122 @@
+:root {
+  --pesu-blue: #00377b;
+  --pesu-orange: #ff6c00;
+  --page-bg: #f0f2f5;
+  --surface: #ffffff;
+  --border: #d4d8dd;
+  --border-strong: #9ca3af;
+  --text: #111827;
+  --muted: #5a6b8a;
+  --success: #166534;
+  --success-bg: #f0fdf4;
+  --error: #991b1b;
+  --error-bg: #fef2f2;
+}
+
+select,
+input,
+textarea,
+button,
+a.button-link {
+  min-width: 0;
+  border-radius: 6px;
+  font: 14px/1.3 Arial, sans-serif;
+}
+
+select,
+input,
+textarea {
+  border: 1px solid var(--border-strong);
+  background-color: var(--surface);
+  color: var(--text);
+}
+
+select,
+input,
+button,
+a.button-link {
+  min-height: 36px;
+}
+
+select {
+  appearance: none;
+  padding: 0 34px 0 10px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--pesu-blue) 50%),
+    linear-gradient(135deg, var(--pesu-blue) 50%, transparent 50%);
+  background-position:
+    calc(100% - 17px) 15px,
+    calc(100% - 12px) 15px;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+input,
+textarea {
+  padding: 8px 10px;
+}
+
+button,
+a.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button.primary,
+a.button-link.primary {
+  border-color: var(--pesu-blue);
+  background: var(--pesu-blue);
+  color: #ffffff;
+}
+
+button.danger {
+  border-color: #fecaca;
+  background: #ffffff;
+  color: var(--error);
+}
+
+button:disabled,
+a.button-link.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+select:focus,
+input:focus,
+textarea:focus,
+button:focus-visible,
+a.button-link:focus-visible {
+  outline: 2px solid rgba(255, 108, 0, 0.35);
+  outline-offset: 1px;
+}
+
+.status-line {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #374151;
+  font-size: 13px;
+}
+
+.status-line.ready {
+  border-color: #bbf7d0;
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.status-line.error {
+  border-color: #fecaca;
+  background: var(--error-bg);
+  color: var(--error);
+}

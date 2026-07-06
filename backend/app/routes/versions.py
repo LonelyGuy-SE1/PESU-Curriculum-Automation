@@ -10,6 +10,7 @@ from app.services.errors import database_http_exception
 from app.supabase import first_row, supabase
 
 router = APIRouter()
+CURRICULUM_YEAR = "2025-2026"
 
 
 def _version(version_id: int) -> dict:
@@ -67,7 +68,7 @@ def create_version(payload: dict):
                 {
                     "name": name,
                     "program": str(payload.get("program") or (courses[0]["course_json"].get("program") if courses else "") or "").strip(),
-                    "academic_year": str(payload.get("academic_year") or "").strip(),
+                    "academic_year": str(payload.get("academic_year") or CURRICULUM_YEAR).strip(),
                     "status": str(payload.get("status") or "draft").strip(),
                 }
             )
@@ -139,13 +140,14 @@ def get_version(version_id: int):
             supabase.table("finalized_submissions")
             .select("*")
             .eq("curriculum_version_id", version_id)
-            .order("refined_id")
             .execute()
             .data
         )
     except APIError as exc:
         raise database_http_exception(exc) from exc
-    return {"version": version, "courses": [_course_summary(row) for row in rows]}
+    courses = [_course_summary(row) for row in rows]
+    courses.sort(key=lambda course: (int(course.get("semester") or 0), str(course.get("course_code") or ""), str(course.get("course_title") or "")))
+    return {"version": version, "courses": courses}
 
 
 @router.get("/versions/{version_id}/courses/{refined_id}")
@@ -164,14 +166,15 @@ def preview_version_course(version_id: int, refined_id: int):
         snapshot = _snapshot(version_id, refined_id)
     except APIError as exc:
         raise database_http_exception(exc) from exc
-    html = templates.get_template("jinja_sample.html").render(course=snapshot["course_json"], curriculum_year="2025-2026", asset_root="/")
+    version = _version(version_id)
+    html = templates.get_template("jinja_sample.html").render(course=snapshot["course_json"], curriculum_year=version.get("academic_year") or CURRICULUM_YEAR, asset_root="/")
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/versions/{version_id}/preview")
 def preview_version(version_id: int):
     try:
-        _version(version_id)
+        version = _version(version_id)
         rows = (
             supabase.table("finalized_submissions")
             .select("*")
@@ -186,5 +189,5 @@ def preview_version(version_id: int):
         (row["course_json"] for row in rows),
         key=lambda course: (int(course.get("semester") or 0), str(course.get("course_code") or ""), str(course.get("course_title") or "")),
     )
-    html = templates.get_template("jinja_sample.html").render(courses=courses, semester="", curriculum_year="2025-2026", asset_root="/")
+    html = templates.get_template("jinja_sample.html").render(courses=courses, semester="", curriculum_year=version.get("academic_year") or CURRICULUM_YEAR, asset_root="/")
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})

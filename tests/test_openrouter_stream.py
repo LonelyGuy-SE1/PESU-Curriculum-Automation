@@ -159,3 +159,29 @@ def test_rate_limit_error_includes_retry_after(monkeypatch):
 
     assert error.value.status_code == 429
     assert error.value.message == "Model provider is rate limited. Try again in 60 seconds."
+
+
+def test_missing_choices_is_openrouter_error(monkeypatch):
+    openrouter = load_openrouter(monkeypatch)
+    request = httpx.Request("POST", "https://openrouter.test")
+
+    class FakeClient:
+        def __init__(self, *_, **__):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def post(self, *_, **__):
+            return httpx.Response(200, json={"error": {"message": "tools are unsupported by this model"}}, request=request)
+
+    monkeypatch.setattr(openrouter, "Client", FakeClient)
+
+    with pytest.raises(openrouter.OpenRouterError) as error:
+        openrouter._chat_message([{"role": "user", "content": "hello"}], [{"type": "function"}])
+
+    assert error.value.status_code == 502
+    assert error.value.message == "The selected model does not support editor tools. Switch to a tool-calling model and try again."

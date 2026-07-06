@@ -1,12 +1,17 @@
 const version = document.getElementById("version");
 const course = document.getElementById("course");
+const previewVersion = document.getElementById("preview-version");
 const openEditor = document.getElementById("open-editor");
 const previewLink = document.getElementById("preview-link");
 const snapshotForm = document.getElementById("snapshot-form");
 const versionName = document.getElementById("version-name");
-const academicYear = document.getElementById("academic-year");
 const statusText = document.getElementById("status");
 const viewer = document.getElementById("viewer");
+
+function setStatus(text, kind = "") {
+  statusText.textContent = text || "";
+  statusText.className = `status-line ${kind}`.trim();
+}
 
 function option(value, text) {
   const item = document.createElement("option");
@@ -23,8 +28,7 @@ async function json(url, options) {
 }
 
 function versionLabel(item) {
-  const year = item.academic_year ? ` ${item.academic_year}` : "";
-  return `${item.name}${year}`;
+  return item.name || `Snapshot ${item.id}`;
 }
 
 function courseLabel(item) {
@@ -37,7 +41,7 @@ async function loadVersions() {
   const body = await json("/api/versions");
   version.replaceChildren(...(body.versions || []).map((item) => option(item.id, versionLabel(item))));
   if (!version.value) {
-    statusText.textContent = "No versions saved.";
+    setStatus("No snapshots saved.");
     return;
   }
   await loadVersion();
@@ -46,16 +50,27 @@ async function loadVersions() {
 async function loadVersion() {
   const body = await json(`/api/versions/${version.value}`);
   course.replaceChildren(...(body.courses || []).map((item) => option(item.refined_id, courseLabel(item))));
+  showVersionPreview();
+  setStatus(body.courses?.length ? `${body.courses.length} courses in snapshot.` : "Snapshot has no courses.", body.courses?.length ? "ready" : "");
+}
+
+function showVersionPreview() {
+  if (!version.value) return;
   previewLink.href = `/api/versions/${version.value}/preview`;
   viewer.src = previewLink.href;
-  statusText.textContent = body.courses?.length ? "Version loaded." : "Version has no courses.";
+}
+
+function showCoursePreview() {
+  if (!version.value || !course.value) return;
+  previewLink.href = `/api/versions/${version.value}/courses/${course.value}/preview`;
+  viewer.src = previewLink.href;
 }
 
 version.addEventListener("change", loadVersion);
+previewVersion.addEventListener("click", showVersionPreview);
 
 course.addEventListener("change", () => {
-  if (!course.value) return;
-  viewer.src = `/api/versions/${version.value}/courses/${course.value}/preview`;
+  showCoursePreview();
 });
 
 openEditor.addEventListener("click", () => {
@@ -65,18 +80,17 @@ openEditor.addEventListener("click", () => {
 
 snapshotForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  statusText.textContent = "Saving version...";
+  setStatus("Saving snapshot...");
   await json("/api/versions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: versionName.value, academic_year: academicYear.value }),
+    body: JSON.stringify({ name: versionName.value }),
   });
   versionName.value = "";
-  academicYear.value = "";
-  statusText.textContent = "Version saved.";
+  setStatus("Snapshot saved.", "ready");
   await loadVersions();
 });
 
 loadVersions().catch((error) => {
-  statusText.textContent = error instanceof Error ? error.message : "Unable to load versions.";
+  setStatus(error instanceof Error ? error.message : "Unable to load versions.", "error");
 });

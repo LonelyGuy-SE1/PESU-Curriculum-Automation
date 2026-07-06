@@ -7,6 +7,15 @@ class ChatSessionPayload(BaseModel):
     title: str = ""
 
 
+class ChatSessionTitlePayload(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def strip_title(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
 class ChatMessagePayload(BaseModel):
     content: str = ""
     metadata: dict = Field(default_factory=dict)

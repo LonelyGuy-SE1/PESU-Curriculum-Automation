@@ -7,32 +7,35 @@
     <link rel="stylesheet" href="live-editor.css" />
   </head>
   <body>
-    <div class="toolbar">
-      <select id="semester" aria-label="Semester">
-        <option value="1">Semester 1</option>
-        <option value="2">Semester 2</option>
-        <option value="3">Semester 3</option>
-        <option value="4">Semester 4</option>
-        <option value="5">Semester 5</option>
-        <option value="6">Semester 6</option>
-        <option value="7">Semester 7</option>
-        <option value="8">Semester 8</option>
-      </select>
-      <select id="course" aria-label="Course"></select>
-      <select id="view-mode" aria-label="Preview mode">
-        <option value="course">Course Preview</option>
-        <option value="document">Full Document</option>
-      </select>
-      <label class="version-control">
-        Version
-        <input id="version-name" type="text" />
-      </label>
-      <button id="save-version" type="button">Save Version</button>
-      <select id="version-select" aria-label="Saved version"></select>
-      <button id="restore-version" type="button">Restore</button>
-      <a id="preview" target="_blank" rel="noreferrer">Open</a>
-      <span id="status"></span>
-    </div>
+    <header class="toolbar">
+      <div class="toolbar-group course-controls">
+        <select id="semester" aria-label="Semester">
+          <option value="1">Semester 1</option>
+          <option value="2">Semester 2</option>
+          <option value="3">Semester 3</option>
+          <option value="4">Semester 4</option>
+          <option value="5">Semester 5</option>
+          <option value="6">Semester 6</option>
+          <option value="7">Semester 7</option>
+          <option value="8">Semester 8</option>
+        </select>
+        <select id="course" aria-label="Course"></select>
+        <select id="view-mode" aria-label="Preview mode">
+          <option value="course">Course Preview</option>
+          <option value="document">Full Document</option>
+        </select>
+        <a class="button-link" id="preview" target="_blank" rel="noreferrer">Open</a>
+      </div>
+
+      <div class="toolbar-group version-controls">
+        <input id="version-name" type="text" aria-label="Version name" />
+        <button id="save-version" type="button">Save Version</button>
+        <select id="version-select" aria-label="Saved version"></select>
+        <button id="restore-version" type="button">Restore</button>
+      </div>
+
+      <span class="status-line" id="status" role="status"></span>
+    </header>
 
     <main class="workspace">
       <section class="preview-pane" aria-label="Course preview">
@@ -50,6 +53,9 @@
         <section class="panel chat-panel active" id="chat-panel" role="tabpanel" aria-labelledby="chat-tab">
           <div class="thread-bar">
             <select id="chat-session" aria-label="Chat thread"></select>
+            <input id="chat-title" type="text" aria-label="Chat title" />
+            <button id="rename-chat" type="button">Rename</button>
+            <button class="danger" id="delete-chat" type="button">Delete</button>
             <button id="new-chat" type="button">New</button>
           </div>
           <div class="chat-log" id="chat-log" aria-live="polite"></div>
@@ -59,7 +65,6 @@
             <div class="composer-actions">
               <button id="attach" type="button">Attach</button>
               <input id="files" type="file" multiple accept="image/*,.pdf,.txt,.doc,.docx" hidden />
-              <button id="clear-chat" type="button">Clear</button>
               <button class="primary" id="send" type="button">Send</button>
             </div>
           </div>
@@ -77,11 +82,11 @@
           <div class="document-draft">
             <div class="draft-loader">
               <select id="course-draft-select" aria-label="Course draft"></select>
-              <button id="load-course-draft" type="button">Course</button>
+              <button id="load-course-draft" type="button">Load Course</button>
             </div>
             <div class="draft-loader">
               <select id="document-draft-select" aria-label="Document draft"></select>
-              <button id="load-document-draft" type="button">Document</button>
+              <button id="load-document-draft" type="button">Load Document</button>
             </div>
           </div>
           <div class="review-summary" id="review-summary"></div>

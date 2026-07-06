@@ -26,11 +26,20 @@ def test_versions_script_parses():
     subprocess.run([node, "-e", script], check=True)
 
 
+def test_courses_script_parses():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    script = "new Function(require('fs').readFileSync('frontend/courses/courses.js', 'utf8'));"
+    subprocess.run([node, "-e", script], check=True)
+
+
 def test_live_editor_uses_safe_message_rendering():
     text = LIVE_EDITOR_JS.read_text()
 
     assert "function renderMessageContent" in text
     assert ".innerHTML" not in text
+    assert 'content: "Working..."' not in text
 
 
 def test_live_editor_uses_external_assets():
@@ -44,6 +53,13 @@ def test_live_editor_uses_external_assets():
     assert "<script>" not in text
 
 
+def test_versions_page_uses_snapshot_language():
+    text = Path("frontend/versions/index.html").read_text()
+
+    assert "Snapshot Label" in text
+    assert "Academic Year" not in text
+
+
 def test_preview_uses_external_assets():
     text = Path("frontend/preview/index.html").read_text()
 
@@ -55,10 +71,12 @@ def test_preview_uses_external_assets():
 
 def test_frontend_pages_are_foldered():
     assert Path("frontend/form/index.html").exists()
+    assert Path("frontend/courses/index.html").exists()
     assert Path("frontend/preview/index.html").exists()
     assert Path("frontend/live-editor/index.html").exists()
     assert Path("frontend/versions/index.html").exists()
     assert Path("frontend/form/form.js").exists()
+    assert Path("frontend/courses/courses.js").exists()
     assert Path("frontend/preview/preview.js").exists()
     assert Path("frontend/live-editor/live-editor.js").exists()
     assert Path("frontend/versions/versions.js").exists()
@@ -66,6 +84,7 @@ def test_frontend_pages_are_foldered():
 
 def test_old_frontend_urls_redirect():
     assert 'content="0;url=form/"' in Path("frontend/form.html").read_text()
+    assert 'content="0;url=courses/"' in Path("frontend/courses.html").read_text()
     assert 'content="0;url=preview/"' in Path("frontend/preview.html").read_text()
     assert 'content="0;url=live-editor/"' in Path("frontend/live-editor.html").read_text()
     assert 'content="0;url=versions/"' in Path("frontend/versions.html").read_text()
@@ -92,6 +111,7 @@ def test_frontend_routes_mount(monkeypatch):
     expected = {
         "/": "PESU Curriculum Automation",
         "/form/": "Course Submission",
+        "/courses/": "Course Management",
         "/preview/": "Curriculum Preview",
         "/live-editor/": "Live Editor",
         "/versions/": "Curriculum Versions",

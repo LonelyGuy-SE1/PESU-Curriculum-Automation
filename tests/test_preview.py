@@ -42,3 +42,20 @@ def test_preview_parses_numbered_books():
     course = build_course_preview(row)
 
     assert course["text_books"] == ["First Book, 2024.", "Second Book, 2025."]
+
+
+def test_preview_cleans_reference_book_table_noise():
+    row = {
+        "course_title": "Books",
+        "reference_books": """
+Reference             1. First Reference, 2024.
+Book(s):              2. Second Reference, 2025.
+Course
+Outcome               should not render
+""",
+        "_submission": {"credit_category": "4", "target_department": "CSE"},
+    }
+
+    course = build_course_preview(row)
+
+    assert course["reference_books"] == ["First Reference, 2024.", "Second Reference, 2025."]

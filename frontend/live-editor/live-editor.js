@@ -16,13 +16,15 @@ const chatPanel = document.getElementById("chat-panel");
 const fieldsPanel = document.getElementById("fields-panel");
 const reviewPanel = document.getElementById("review-panel");
 const chatSession = document.getElementById("chat-session");
+const chatTitle = document.getElementById("chat-title");
+const renameChat = document.getElementById("rename-chat");
+const deleteChat = document.getElementById("delete-chat");
 const newChat = document.getElementById("new-chat");
 const chatLog = document.getElementById("chat-log");
 const message = document.getElementById("message");
 const attach = document.getElementById("attach");
 const files = document.getElementById("files");
 const draftAttachments = document.getElementById("draft-attachments");
-const clearChat = document.getElementById("clear-chat");
 const send = document.getElementById("send");
 const editor = document.getElementById("editor");
 const draft = document.getElementById("draft");
@@ -41,6 +43,26 @@ let activeSessionId = "";
 let queuedFiles = [];
 let versionMode = false;
 const initialParams = new URLSearchParams(location.search);
+
+function setStatus(text, kind = "") {
+  statusText.textContent = text || "";
+  statusText.className = kind;
+}
+
+function showError(error, fallback = "Action failed.") {
+  loading.classList.remove("active");
+  const text = error instanceof Error ? error.message : fallback;
+  setStatus(text || fallback, "error");
+}
+
+async function errorMessage(response, fallback) {
+  try {
+    const body = await response.json();
+    return body.detail || body.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 async function courseIds(sem) {
   const response = await fetch(`/api/preview/semester/${sem}/courses`);
@@ -98,23 +120,23 @@ async function refreshVersions() {
 async function saveCurrentVersion() {
   const name = versionName.value.trim();
   if (!name) {
-    statusText.textContent = "Version name is required.";
+    setStatus("Version name is required.", "error");
     return;
   }
   saveVersion.disabled = true;
   try {
-    statusText.textContent = "Saving full version...";
+    setStatus("Saving full version...");
     const response = await fetch("/api/versions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
+    if (!response.ok) throw new Error(await errorMessage(response, "Version save failed"));
     const body = await response.json();
-    if (!response.ok) throw new Error(body.detail || "Version save failed");
     versionName.value = "";
     await refreshVersions();
     versionSelect.value = String(body.version.id);
-    statusText.textContent = `Saved ${body.courses} courses.`;
+    setStatus(`Saved ${body.courses} courses.`, "ready");
   } finally {
     saveVersion.disabled = false;
   }
@@ -124,12 +146,12 @@ async function restoreSelectedVersion() {
   if (!versionSelect.value) return;
   restoreVersion.disabled = true;
   try {
-    statusText.textContent = "Restoring full version...";
+    setStatus("Restoring full version...");
     const response = await fetch(`/api/versions/${versionSelect.value}/restore`, { method: "POST" });
+    if (!response.ok) throw new Error(await errorMessage(response, "Version restore failed"));
     const body = await response.json();
-    if (!response.ok) throw new Error(body.detail || "Version restore failed");
     if (activeCourseId) await loadCourse(activeCourseId);
-    statusText.textContent = `Restored ${body.courses_restored} courses. Archived ${body.courses_archived || 0}.`;
+    setStatus(`Restored ${body.courses_restored} courses. Archived ${body.courses_archived || 0}.`, "ready");
   } finally {
     restoreVersion.disabled = false;
   }
@@ -152,6 +174,8 @@ async function refreshChatSessions() {
   const sessions = body.sessions || [];
   chatSession.replaceChildren(...sessions.map((item) => option(String(item.id), sessionTitle(item))));
   if (activeSessionId) chatSession.value = activeSessionId;
+  const selected = sessions.find((item) => String(item.id) === chatSession.value);
+  chatTitle.value = selected?.title || "";
 }
 
 async function createChatSession() {
@@ -167,6 +191,32 @@ async function createChatSession() {
   await refreshChatSessions();
   chatSession.value = activeSessionId;
   return activeSessionId;
+}
+
+async function renameActiveChat() {
+  if (!activeSessionId || !chatTitle.value.trim()) return;
+  const response = await fetch(`/api/chat/sessions/${activeSessionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: chatTitle.value.trim() }),
+  });
+  if (!response.ok) throw new Error(await errorMessage(response, "Rename failed"));
+  await refreshChatSessions();
+  setStatus("Thread renamed.", "ready");
+}
+
+async function deleteActiveChat() {
+  if (!activeSessionId) return;
+  if (!confirm("Delete this chat thread permanently?")) return;
+  const deleted = activeSessionId;
+  const response = await fetch(`/api/chat/sessions/${deleted}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(await errorMessage(response, "Delete failed"));
+  localStorage.removeItem(chatKey());
+  activeSessionId = "";
+  chatLog.replaceChildren();
+  await ensureChatSession();
+  await renderMessages();
+  setStatus("Thread deleted.", "ready");
 }
 
 async function ensureChatSession() {
@@ -421,6 +471,56 @@ function renderDraftReview(draftRow) {
   applyDraft.disabled = draftRow.status !== "proposed" || Boolean((summary.protected_changes || []).length);
 }
 
+function showCourseDraft(draftRow) {
+  renderDraftReview(draftRow);
+  viewer.src = `/api/agent/drafts/${draftRow.id}/preview`;
+  preview.href = `/api/agent/drafts/${draftRow.id}/preview`;
+  setStatus("Draft ready for review.", "ready");
+  refreshDraftSelectors().catch(showError);
+  setTab("review");
+}
+
+async function loadCourseDraftById(id) {
+  if (!id) return;
+  setStatus("Loading course draft...");
+  const response = await fetch(`/api/agent/drafts/${id}`);
+  if (!response.ok) throw new Error(await errorMessage(response, "Course draft not found"));
+  const body = await response.json();
+  showCourseDraft(body.draft);
+  setStatus("Course draft loaded.", "ready");
+}
+
+async function loadDocumentDraftById(id) {
+  if (!id) return;
+  setStatus("Loading document draft...");
+  const response = await fetch(`/api/agent/document-drafts/${id}`);
+  if (!response.ok) throw new Error(await errorMessage(response, "Document draft not found"));
+  const body = await response.json();
+  const summary = body.document_draft.diff_summary || {};
+  activeDraftId = "";
+  reviewSummary.replaceChildren(
+    summaryLine("Document draft", id),
+    summaryLine("Status", body.document_draft.status || ""),
+    summaryLine("Courses changed", String(summary.courses_changed || 0)),
+    summaryLine("Removed-topic courses", String(summary.courses_with_removed_topics || 0)),
+    summaryLine("Protected-change courses", String(summary.courses_with_protected_changes || 0)),
+    summaryLine("Max syllabus change", `${summary.max_syllabus_change_percent || 0}%`),
+  );
+  renderDiff(
+    (body.drafts || [])
+      .map((item) => `Course draft ${item.id}\n${item.diff_summary?.unified_diff || ""}`)
+      .join("\n\n"),
+  );
+  previewDraft.disabled = true;
+  applyDraft.disabled = true;
+  viewer.src = `/api/agent/document-drafts/${id}/preview`;
+  preview.href = `/api/agent/document-drafts/${id}/preview`;
+  await refreshDraftSelectors();
+  documentDraftSelect.value = String(id);
+  setTab("review");
+  setStatus("Document draft loaded.", "ready");
+}
+
 function courseDraftLabel(item) {
   const title = item.course_title || `Course ${item.refined_id}`;
   const code = item.course_code ? `${item.course_code} - ` : "";
@@ -463,7 +563,7 @@ function filePreview(file) {
 
 async function queueFiles(fileList) {
   await ensureChatSession();
-  statusText.textContent = "Uploading attachments...";
+  setStatus("Uploading attachments...");
   const pending = await Promise.all(
     Array.from(fileList).map(async (file) => ({
       name: file.name,
@@ -482,8 +582,7 @@ async function queueFiles(fileList) {
     body: form,
   });
   if (!response.ok) {
-    const body = await response.json();
-    throw new Error(body.detail || "Attachment upload failed");
+    throw new Error(await errorMessage(response, "Attachment upload failed"));
   }
   const body = await response.json();
   const uploaded = (body.attachments || []).map((file, index) => ({
@@ -492,7 +591,7 @@ async function queueFiles(fileList) {
   }));
   queuedFiles.splice(queuedFiles.length - pending.length, pending.length, ...uploaded);
   renderDraftAttachments();
-  statusText.textContent = "Attachments ready.";
+  setStatus("Attachments ready.", "ready");
   files.value = "";
 }
 
@@ -511,7 +610,7 @@ async function loadCourse(id) {
   viewer.src = `/api/preview/course/${id}`;
   preview.href = `/api/preview/course/${id}`;
   const title = row.fields?.course_title || `Course ${id}`;
-  statusText.textContent = title;
+  setStatus(title);
   const selected = course.querySelector(`option[value="${id}"]`);
   if (selected) selected.textContent = title;
   queuedFiles = [];
@@ -534,7 +633,7 @@ async function loadVersionCourse(versionId, refinedId) {
   editor.value = JSON.stringify(body.fields || {}, null, 2);
   viewer.src = `/api/versions/${versionId}/courses/${refinedId}/preview`;
   preview.href = viewer.src;
-  statusText.textContent = `${body.version.name}: ${body.fields?.course_title || `Course ${refinedId}`}`;
+  setStatus(`${body.version.name}: ${body.fields?.course_title || `Course ${refinedId}`}`);
   queuedFiles = [];
   renderDraftAttachments();
   await ensureChatSession();
@@ -553,7 +652,7 @@ async function loadDocumentPreview() {
   loading.classList.add("active");
   viewer.src = "/api/preview/pdf";
   preview.href = "/api/preview/pdf";
-  statusText.textContent = "Full Document";
+  setStatus("Full Document");
   await ensureChatSession();
   await renderMessages();
 }
@@ -567,12 +666,12 @@ async function loadSemester(sem) {
   viewer.removeAttribute("src");
   preview.removeAttribute("href");
   loading.classList.add("active");
-  statusText.textContent = "Loading...";
+  setStatus("Loading...");
 
   const ids = await courseIds(sem);
   if (!ids.length) {
     loading.classList.remove("active");
-    statusText.textContent = `No refined courses found for Semester ${sem}.`;
+    setStatus(`No refined courses found for Semester ${sem}.`);
     return;
   }
 
@@ -584,37 +683,46 @@ chatTab.addEventListener("click", () => setTab("chat"));
 fieldsTab.addEventListener("click", () => setTab("fields"));
 reviewTab.addEventListener("click", () => setTab("review"));
 viewer.addEventListener("load", () => loading.classList.remove("active"));
-semester.addEventListener("change", () => loadSemester(semester.value));
-course.addEventListener("change", () => loadCourse(course.value));
+semester.addEventListener("change", () => loadSemester(semester.value).catch(showError));
+course.addEventListener("change", () => loadCourse(course.value).catch(showError));
 viewMode.addEventListener("change", async () => {
-  if (viewMode.value === "document") {
-    await loadDocumentPreview();
-    return;
+  try {
+    if (viewMode.value === "document") {
+      await loadDocumentPreview();
+      return;
+    }
+    course.disabled = false;
+    semester.disabled = false;
+    await loadSemester(semester.value);
+  } catch (error) {
+    showError(error);
   }
-  course.disabled = false;
-  semester.disabled = false;
-  await loadSemester(semester.value);
 });
 attach.addEventListener("click", () => files.click());
-files.addEventListener("change", () => queueFiles(files.files));
+files.addEventListener("change", () => queueFiles(files.files).catch(showError));
 saveVersion.addEventListener("click", () => saveCurrentVersion().catch((error) => {
-  statusText.textContent = error instanceof Error ? error.message : "Version save failed.";
+  showError(error, "Version save failed.");
 }));
 restoreVersion.addEventListener("click", () => restoreSelectedVersion().catch((error) => {
-  statusText.textContent = error instanceof Error ? error.message : "Version restore failed.";
+  showError(error, "Version restore failed.");
 }));
 
 chatSession.addEventListener("change", async () => {
   activeSessionId = chatSession.value;
   localStorage.setItem(chatKey(), activeSessionId);
+  await refreshChatSessions();
   await renderMessages();
 });
+
+renameChat.addEventListener("click", () => renameActiveChat().catch(showError));
+deleteChat.addEventListener("click", () => deleteActiveChat().catch(showError));
 
 newChat.addEventListener("click", async () => {
   localStorage.removeItem(chatKey());
   activeSessionId = "";
   chatLog.replaceChildren();
   await createChatSession();
+  await renderMessages();
 });
 
 send.addEventListener("click", async () => {
@@ -631,7 +739,6 @@ send.addEventListener("click", async () => {
       attachments,
       created_at: new Date().toISOString(),
     });
-    assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
     message.value = "";
     queuedFiles = [];
     renderDraftAttachments();
@@ -642,56 +749,47 @@ send.addEventListener("click", async () => {
       body: JSON.stringify({ content, metadata: { attachments } }),
     });
     if (!response.ok) {
-      const body = await response.json();
-      throw new Error(body.detail || "Chat failed");
+      throw new Error(await errorMessage(response, "Chat failed"));
     }
 
     let answer = "";
     await readEventStream(response, ({ event, data }) => {
-      if (event === "status") statusText.textContent = data.message || "";
+      if (event === "status") setStatus(data.message || "");
       if (event === "token") {
+        if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
         answer += data.text || "";
         renderMessageContent(assistant.content, answer);
         chatLog.scrollTop = chatLog.scrollHeight;
       }
       if (event === "draft" && data.draft) {
-        renderDraftReview(data.draft);
-        viewer.src = `/api/agent/drafts/${data.draft.id}/preview`;
-        preview.href = `/api/agent/drafts/${data.draft.id}/preview`;
-        statusText.textContent = "Draft ready for review.";
-        refreshDraftSelectors().catch(() => {});
-        setTab("review");
+        if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
+        if (!answer) renderMessageContent(assistant.content, "Draft ready for review.");
+        showCourseDraft(data.draft);
+      }
+      if (event === "document_draft" && data.document_draft) {
+        if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
+        if (!answer) renderMessageContent(assistant.content, "Document draft ready for review.");
+        loadDocumentDraftById(data.document_draft.id).catch(showError);
       }
       if (event === "error") throw new Error(data.message || "Chat failed");
-      if (event === "done") statusText.textContent = "Response saved.";
+      if (event === "done") setStatus("Response saved.", "ready");
     });
   } catch (error) {
     const text = error instanceof Error ? error.message : "Chat failed";
-    statusText.textContent = text;
+    setStatus(text, "error");
     if (assistant) {
+      assistant.bubble.classList.add("error");
       renderMessageContent(assistant.content, text);
-    } else {
-      appendMessage({ role: "assistant", content: text, created_at: new Date().toISOString() });
     }
   } finally {
     send.disabled = false;
   }
 });
 
-clearChat.addEventListener("click", async () => {
-  if (activeSessionId) {
-    await fetch(`/api/chat/sessions/${activeSessionId}`, { method: "DELETE" });
-  }
-  localStorage.removeItem(chatKey());
-  activeSessionId = "";
-  chatLog.replaceChildren();
-  await ensureChatSession();
-});
-
 draft.addEventListener("click", async () => {
   const refinedId = activeCourseId || course.value;
   if (!refinedId || viewMode.value !== "course") return;
-  statusText.textContent = "Creating draft...";
+  setStatus("Creating draft...");
   const parsed = JSON.parse(editor.value);
   const response = await fetch("/api/agent/drafts", {
     method: "POST",
@@ -699,16 +797,10 @@ draft.addEventListener("click", async () => {
     body: JSON.stringify({ refined_id: Number(refinedId), fields: parsed, reason: versionMode ? "Version rollback draft" : "Live editor draft" }),
   });
   if (!response.ok) {
-    const body = await response.json();
-    throw new Error(body.detail || "Draft failed");
+    throw new Error(await errorMessage(response, "Draft failed"));
   }
   const body = await response.json();
-  renderDraftReview(body.draft);
-  viewer.src = `/api/agent/drafts/${body.draft.id}/preview`;
-  preview.href = `/api/agent/drafts/${body.draft.id}/preview`;
-  statusText.textContent = "Draft ready for review.";
-  await refreshDraftSelectors();
-  setTab("review");
+  showCourseDraft(body.draft);
 });
 
 previewDraft.addEventListener("click", () => {
@@ -719,66 +811,22 @@ previewDraft.addEventListener("click", () => {
 
 applyDraft.addEventListener("click", async () => {
   if (!activeDraftId) return;
-  statusText.textContent = "Applying draft...";
+  setStatus("Applying draft...");
   const response = await fetch(`/api/agent/drafts/${activeDraftId}/apply`, { method: "POST" });
   if (!response.ok) {
-    const body = await response.json();
-    throw new Error(body.detail || "Apply failed");
+    throw new Error(await errorMessage(response, "Apply failed"));
   }
   await loadCourse(activeCourseId || course.value);
-  statusText.textContent = "Draft applied.";
+  setStatus("Draft applied.", "ready");
 });
 
-loadDocumentDraft.addEventListener("click", async () => {
-  const id = documentDraftSelect.value;
-  if (!id) return;
-  statusText.textContent = "Loading document draft...";
-  const response = await fetch(`/api/agent/document-drafts/${id}`);
-  if (!response.ok) {
-    const body = await response.json();
-    throw new Error(body.detail || "Document draft not found");
-  }
-  const body = await response.json();
-  const summary = body.document_draft.diff_summary || {};
-  activeDraftId = "";
-  reviewSummary.replaceChildren(
-    summaryLine("Document draft", id),
-    summaryLine("Status", body.document_draft.status || ""),
-    summaryLine("Courses changed", String(summary.courses_changed || 0)),
-    summaryLine("Removed-topic courses", String(summary.courses_with_removed_topics || 0)),
-    summaryLine("Protected-change courses", String(summary.courses_with_protected_changes || 0)),
-    summaryLine("Max syllabus change", `${summary.max_syllabus_change_percent || 0}%`),
-  );
-  renderDiff(
-    (body.drafts || [])
-      .map((item) => `Course draft ${item.id}\n${item.diff_summary?.unified_diff || ""}`)
-      .join("\n\n"),
-  );
-  previewDraft.disabled = true;
-  applyDraft.disabled = true;
-  viewer.src = `/api/agent/document-drafts/${id}/preview`;
-  preview.href = `/api/agent/document-drafts/${id}/preview`;
-});
+loadDocumentDraft.addEventListener("click", () => loadDocumentDraftById(documentDraftSelect.value).catch(showError));
 
-loadCourseDraft.addEventListener("click", async () => {
-  const id = courseDraftSelect.value;
-  if (!id) return;
-  statusText.textContent = "Loading course draft...";
-  const response = await fetch(`/api/agent/drafts/${id}`);
-  if (!response.ok) {
-    const body = await response.json();
-    throw new Error(body.detail || "Course draft not found");
-  }
-  const body = await response.json();
-  renderDraftReview(body.draft);
-  viewer.src = `/api/agent/drafts/${id}/preview`;
-  preview.href = `/api/agent/drafts/${id}/preview`;
-  statusText.textContent = "Course draft loaded.";
-});
+loadCourseDraft.addEventListener("click", () => loadCourseDraftById(courseDraftSelect.value).catch(showError));
 
 save.addEventListener("click", async () => {
   if (versionMode) return;
-  statusText.textContent = "Saving...";
+  setStatus("Saving...");
   const parsed = JSON.parse(editor.value);
   const response = await fetch(`/api/refined/${activeCourseId || course.value}`, {
     method: "PATCH",
@@ -786,16 +834,19 @@ save.addEventListener("click", async () => {
     body: JSON.stringify({ fields: parsed }),
   });
   if (!response.ok) {
-    const body = await response.json();
-    throw new Error(body.detail || "Save failed");
+    throw new Error(await errorMessage(response, "Save failed"));
   }
   await loadCourse(course.value);
   setTab("chat");
 });
 
 window.addEventListener("error", (event) => {
-  loading.classList.remove("active");
-  statusText.textContent = event.message;
+  showError(new Error(event.message));
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  event.preventDefault();
+  showError(event.reason);
 });
 
 const initialVersion = initialParams.get("version");
@@ -804,5 +855,5 @@ const initialLoad = initialVersion && initialCourse ? loadVersionCourse(initialV
 
 Promise.all([refreshVersions(), initialLoad]).catch(() => {
   loading.classList.remove("active");
-  statusText.textContent = "Backend unavailable.";
+  setStatus("Backend unavailable.", "error");
 });

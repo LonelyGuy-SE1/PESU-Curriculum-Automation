@@ -13,7 +13,9 @@ def test_agent_tool_schemas_are_function_tools():
     assert tools
     assert all(tool["type"] == "function" for tool in tools)
     assert "get_current_course_json" in tool_names()
+    assert "get_curriculum_json" in tool_names()
     assert "diff_course_json" in tool_names()
+    assert "create_document_draft" in tool_names()
     assert "apply_course_draft" not in tool_names()
 
 
