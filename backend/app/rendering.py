@@ -5,7 +5,23 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup, escape
 
 APP_DIR = Path(__file__).resolve().parent
-FRONTEND_DIR = APP_DIR.parent.parent / "frontend"
+
+
+def _find_frontend_dir() -> Path:
+    app_root = APP_DIR.parent
+    candidates = (
+        app_root / "frontend",
+        app_root.parent / "frontend",
+        app_root.parent.parent / "frontend",
+        Path("/frontend"),
+    )
+    result = next((p for p in candidates if p.exists()), None)
+    if result is None:
+        raise RuntimeError("Frontend directory not found; cannot resolve image assets for PDF rendering")
+    return result
+
+
+FRONTEND_DIR = _find_frontend_dir()
 templates = Environment(loader=FileSystemLoader(APP_DIR / "templates"), autoescape=select_autoescape(["html", "xml"]))
 URL_RE = re.compile(r"https?://[^\s<>()]+")
 YEAR_RE = re.compile(r"\d{4}")
