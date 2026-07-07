@@ -3,17 +3,22 @@
 {%- endmacro %}
 
 {% macro course_row(course, number) -%}
+  {% set code = course.course_code|string|upper|replace(" ", "") %}
+  {% set title = course.course_title|string|lower %}
+  {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
+  {% set is_no_course = "no course offered" in title %}
+  {% set is_elective = ("AA" in code or "AB" in code or "BA" in code or "BB" in code) and not is_placeholder and not is_no_course %}
   <tr>
     <td class="center">{{ number }}</td>
     <td>{{ course.course_code | course_code_for_year(course.semester, curriculum_year) }}</td>
     <td>{{ course.course_title }}</td>
-    <td class="center">{{ course.lecture_hours }}</td>
-    <td class="center">{{ course.tutorial_hours }}</td>
-    <td class="center">{{ course.practical_hours }}</td>
-    <td class="center">{{ course.self_study }}</td>
-    <td class="center">{{ course.credits }}</td>
+    <td class="center">{% if is_no_course %}{% elif is_elective %}4{% else %}{{ course.lecture_hours }}{% endif %}</td>
+    <td class="center">{% if is_no_course %}{% elif is_elective %}0{% else %}{{ course.tutorial_hours }}{% endif %}</td>
+    <td class="center">{% if is_no_course %}{% elif is_elective %}0{% else %}{{ course.practical_hours }}{% endif %}</td>
+    <td class="center">{% if is_no_course %}{% elif is_elective %}4{% else %}{{ course.self_study }}{% endif %}</td>
+    <td class="center">{% if is_no_course %}{% elif is_elective %}4{% else %}{{ course.credits }}{% endif %}</td>
     <td>{{ course.tools_languages }}</td>
-    <td>{{ course.course_type }}</td>
+    <td>{% if is_no_course %}{% elif is_elective or is_placeholder %}Elective Course{% else %}{{ course.course_type }}{% endif %}</td>
   </tr>
 {%- endmacro %}
 
@@ -32,7 +37,7 @@
   {% if not requested_semester or requested_semester == summary_semester|string %}
     {% set totals = namespace(count=0, lecture=0, lecture_credit=0, tutorial=0, practical=0, self_study=0, credits=0) %}
     {% for summary_course in course_list %}
-      {% set code = summary_course.course_code|string|upper %}
+      {% set code = summary_course.course_code|string|upper|replace(" ", "") %}
       {% set title = summary_course.course_title|string|lower %}
       {% set course_type = summary_course.course_type|string|lower %}
       {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
@@ -55,7 +60,7 @@
     {% set elective_a = namespace(count=0) %}
     {% set elective_b = namespace(count=0) %}
     {% for summary_course in course_list %}
-      {% set code = summary_course.course_code|string|upper %}
+      {% set code = summary_course.course_code|string|upper|replace(" ", "") %}
       {% set title = summary_course.course_title|string|lower %}
       {% set course_type = summary_course.course_type|string|lower %}
       {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
@@ -102,7 +107,7 @@
                 <th rowspan="2">Course Title</th>
                 <th colspan="4" class="center">Hours per week</th>
                 <th class="center nowrap">Credits</th>
-                <th rowspan="2">AI Tools / Tools / Languages</th>
+                <th rowspan="2">AI Tools / Tools /<br /> Languages</th>
                 <th rowspan="2">Course Type</th>
               </tr>
               <tr>
@@ -114,7 +119,7 @@
               </tr>
               {% set row = namespace(number=1) %}
               {% for summary_course in course_list %}
-                {% set code = summary_course.course_code|string|upper %}
+                {% set code = summary_course.course_code|string|upper|replace(" ", "") %}
                 {% set title = summary_course.course_title|string|lower %}
                 {% set course_type = summary_course.course_type|string|lower %}
                 {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
@@ -165,7 +170,7 @@
                 {% set start_number = totals.count + 1 if group == "a" else totals.count + elective_a.count + 1 %}
                 {% set row = namespace(number=start_number) %}
                 {% for summary_course in course_list %}
-                  {% set code = summary_course.course_code|string|upper %}
+                  {% set code = summary_course.course_code|string|upper|replace(" ", "") %}
                   {% set title = summary_course.course_title|string|lower %}
                   {% set course_type = summary_course.course_type|string|lower %}
                   {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
@@ -186,7 +191,7 @@
             {% set first_label = "Elective-I" %}
             {% set second_label = "Elective-II" %}
             {% set specializations = [
-              {"letter": "A", "name": "System and Core Computing (SCC)", "first": ["342AA1", "342AA8", "342AA9"], "second": ["343AB1", "343AB2", "343AB3", "343AB4", "342AB8"]},
+              {"letter": "A", "name": "System and Core Computing (SCC)", "first": ["342AA1", "342AA8", "342AA9"], "second": ["343AB1", "343AB2", "343AB3", "343AB4", "343AB8"]},
               {"letter": "B", "name": "Machine Intelligence and Data Science (MIDS)", "first": ["342AA2", "342AA5", "342AA6", "342AA8"], "second": ["343AB1", "342AB2", "342AB7"]},
               {"letter": "C", "name": "Cyber Security and Connected Systems (CSCS)", "first": ["342AA3", "342AA4", "342AA5", "342AA7"], "second": ["343AB5", "342AB6", "342AB7"]},
             ] %}

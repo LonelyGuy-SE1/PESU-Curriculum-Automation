@@ -167,24 +167,28 @@
         font-size: 9pt;
       }
 
+      .summary-table th {
+        font-size: 8.5pt;
+      }
+
       .summary-number {
         width: 6%;
       }
 
       .summary-code {
-        width: 15%;
+        width: 16%;
       }
 
       .summary-title-column {
-        width: 22%;
+        width: 18%;
       }
 
       .summary-hour {
-        width: 5%;
+        width: 5.5%;
       }
 
       .summary-credit {
-        width: 7%;
+        width: 8%;
       }
 
       .summary-tools {
@@ -202,6 +206,18 @@
       .summary-table td:nth-child(8),
       .summary-table th:nth-child(8) {
         text-align: center;
+      }
+
+      .summary-table td:nth-child(n + 4):nth-child(-n + 8),
+      .summary-table th:nth-child(n + 4):nth-child(-n + 8) {
+        padding-left: 2pt;
+        padding-right: 2pt;
+        white-space: nowrap;
+      }
+
+      .summary-table td:nth-child(2),
+      .summary-table th:nth-child(2) {
+        white-space: nowrap;
       }
 
       .final-number {
@@ -256,6 +272,7 @@
         {% include "jinja_1_to_8.html" %}
       {% endif %}
       {% for course in course_list %}
+        {% if not show_summaries | default(false) or course.render_detail | default(true) %}
         <article class="course">
           <header class="letterhead">
             <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
@@ -401,6 +418,7 @@
             </tbody>
           </table>
         </article>
+        {% endif %}
       {% endfor %}
     {% else %}
       <div class="empty">No refined courses found for Semester {{ semester }}.</div>

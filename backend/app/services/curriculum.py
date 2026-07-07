@@ -5,6 +5,41 @@ from app.services.diffing import diff_course, merge_fields, validate_draft
 from app.supabase import first_row, supabase
 
 DEFAULT_CURRICULUM_YEAR = environ.get("CURRICULUM_YEAR", "").strip()
+SOURCE_ORDER = {
+    "UE25CS151A": 1,
+    "UE25CS151B": 1,
+    "UE24CS251A": 1,
+    "UE24CS252A": 2,
+    "UE24MA242A": 3,
+    "UE24CS241A": 4,
+    "UE24CS243A": 5,
+    "UZ24UZ221A": 6,
+    "UE25MA201A*": 7,
+    "UE24CS251B": 1,
+    "UE24CS252B": 2,
+    "UE24CS241B": 3,
+    "UE24CS242B": 4,
+    "UE24MA241B": 5,
+    "UZ24UZ221B": 6,
+    "UE25MA201B*": 7,
+    "UE23CS351A": 1,
+    "UE23CS352A": 2,
+    "UE23CS341A": 3,
+    "UE23CS342AAX": 4,
+    "UE23CS343ABX": 5,
+    "UE23CS320A": 6,
+    "UE23CS351B": 1,
+    "UE23CS352B": 2,
+    "UE23CS341B": 3,
+    "UE23CS342BAX": 4,
+    "UE23CS343BBX": 5,
+    "UE23CS320B": 6,
+    "UE22CS441A": 1,
+    "UZ22UZ422A": 2,
+    "UE22AM421AXX": 3,
+    "UE22CS421B": 1,
+    "UE22CS461XB": 2,
+}
 
 REFINED_FIELDS = {
     "semester",
@@ -43,8 +78,27 @@ def attach_submissions(rows: list[dict]) -> list[dict]:
 
 def ordered_courses(rows: list[dict]) -> list[dict]:
     rows = attach_submissions(rows)
-    rows.sort(key=lambda row: (int(row.get("semester") or 0), int(row.get("id") or 0)))
+    rows.sort(key=course_sort_key)
     return [build_course_preview(row) for row in rows]
+
+
+def course_sort_key(row: dict) -> tuple[int, int, int]:
+    semester = int(row.get("semester") or 0)
+    code = str(row.get("course_code") or "").replace(" ", "").upper()
+    order = SOURCE_ORDER.get(code)
+    if order is None and semester == 5:
+        order = elective_order(code, "AA", "AB")
+    if order is None and semester == 6:
+        order = elective_order(code, "BA", "BB")
+    return semester, order or 900, int(row.get("id") or 0)
+
+
+def elective_order(code: str, first_group: str, second_group: str) -> int | None:
+    for offset, group in ((100, first_group), (200, second_group)):
+        if group in code:
+            suffix = code.rsplit(group, 1)[-1].rstrip("X")
+            return offset + int(suffix) if suffix.isdigit() else offset
+    return None
 
 
 def selected_curriculum_year(value: str | None = None) -> str:

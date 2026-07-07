@@ -7,8 +7,8 @@ def test_preview_uses_submission_deterministic_fields():
     row = {
         "course_title": "Data Structures",
         "semester": 3,
-        "program": "wrong",
-        "course_type": "wrong",
+        "program": "",
+        "course_type": "",
         "lecture_hours": 0,
         "_submission": {"credit_category": "5", "target_department": "CSE"},
     }
@@ -20,6 +20,27 @@ def test_preview_uses_submission_deterministic_fields():
     assert course["practical_hours"] == "2"
     assert course["credits"] == "5"
     assert course["course_type"] == "Core Course-Lab Integrated"
+
+
+def test_preview_keeps_refined_source_values_when_present():
+    row = {
+        "course_title": "Internship",
+        "semester": 8,
+        "program": "B. TECH",
+        "course_type": "Internship",
+        "lecture_hours": 0,
+        "tutorial_hours": 0,
+        "practical_hours": 16,
+        "self_study": 8,
+        "credits": 8,
+        "_submission": {"credit_category": "4", "target_department": "CSE"},
+    }
+
+    course = build_course_preview(row)
+
+    assert course["practical_hours"] == "16"
+    assert course["credits"] == "8"
+    assert course["course_type"] == "Internship"
 
 
 def test_preview_suppresses_labs_for_theory_course():
@@ -108,6 +129,24 @@ def test_curriculum_template_renders_regular_semester_summary():
     assert "4/6" in html
 
 
+def test_curriculum_template_clubs_semester_one_and_two_summary():
+    html = templates.get_template("jinja_sample.html").render(
+        courses=[
+            _course(course_code="UE25CS151A", course_title="Python", semester="1", credits="5", practical_hours="2", self_study="5"),
+            _course(course_code="UE25CS151B", course_title="C", semester="2", credits="5", practical_hours="2", self_study="5"),
+        ],
+        semester="",
+        curriculum_year="2025-2026",
+        asset_root="",
+        show_summaries=True,
+    )
+    early = html.split("III SEMESTER", 1)[0]
+
+    assert "I SEMESTER (2025-29 BATCH)" in early
+    assert "II SEMESTER (2025-29 BATCH)" in early
+    assert early.count('class="summary-page"') == 1
+
+
 def test_curriculum_template_renders_semester_five_elective_summary():
     html = templates.get_template("jinja_sample.html").render(
         courses=[
@@ -175,6 +214,21 @@ def test_curriculum_template_renders_final_year_summary():
     assert "Technical writing" in html
     assert "Internship" in html
     assert "AI Tools / Tools / Languages" not in html.split("VII SEMESTER", 1)[1].split("</article>", 1)[0]
+
+
+def test_summary_only_courses_do_not_render_detail_pages():
+    html = templates.get_template("jinja_sample.html").render(
+        courses=[
+            _course(course_code="UZ24UZ221A", course_title="CIE L1", semester="3", credits="2", lecture_hours="2", self_study="2", course_type="Special Topic", status="summary_only", render_detail=False),
+        ],
+        semester=3,
+        curriculum_year="2025-2026",
+        asset_root="",
+        show_summaries=True,
+    )
+
+    assert "CIE L1" in html
+    assert "Course Objectives:" not in html
 
 
 def test_ordered_courses_preserves_refined_order_within_semester():

@@ -35,89 +35,122 @@
   {% if total != credit_total %}{{ credit_total }}/{{ total }}{% else %}{{ total }}{% endif %}
 {%- endmacro %}
 
+{% macro regular_table(summary_semester, show_total) -%}
+  {% set totals = namespace(count=0, lecture=0, lecture_credit=0, tutorial=0, practical=0, self_study=0, credits=0) %}
+  {% for summary_course in course_list %}
+    {% if summary_course.semester|string == summary_semester|string %}
+      {% set credit_value = summary_course.credits|int %}
+      {% set totals.count = totals.count + 1 %}
+      {% set totals.lecture = totals.lecture + summary_course.lecture_hours|int %}
+      {% set totals.tutorial = totals.tutorial + summary_course.tutorial_hours|int %}
+      {% set totals.practical = totals.practical + summary_course.practical_hours|int %}
+      {% set totals.self_study = totals.self_study + summary_course.self_study|int %}
+      {% set totals.credits = totals.credits + credit_value %}
+      {% if credit_value > 0 %}
+        {% set totals.lecture_credit = totals.lecture_credit + summary_course.lecture_hours|int %}
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+
+  {% if totals.count %}
+    <h2 class="semester-title">{{ semester_name(summary_semester) }} SEMESTER {{ batch_label(summary_semester, curriculum_year) }}</h2>
+    <table class="meta summary-table">
+      <colgroup>
+        <col class="summary-number" />
+        <col class="summary-code" />
+        <col class="summary-title-column" />
+        <col class="summary-hour" />
+        <col class="summary-hour" />
+        <col class="summary-hour" />
+        <col class="summary-hour" />
+        <col class="summary-credit" />
+        <col class="summary-tools" />
+        <col class="summary-type" />
+      </colgroup>
+      <tbody>
+        <tr>
+          <th rowspan="2" class="center">Sl. No.</th>
+          <th rowspan="2">Course Code</th>
+          <th rowspan="2">Course Title</th>
+          <th colspan="4" class="center">Hours per week</th>
+          <th class="center nowrap">Credits</th>
+          <th rowspan="2">AI Tools / Tools /<br /> Languages</th>
+          <th rowspan="2">Course Type</th>
+        </tr>
+        <tr>
+          <th class="center">L</th>
+          <th class="center">T</th>
+          <th class="center">P</th>
+          <th class="center">S</th>
+          <th class="center">C</th>
+        </tr>
+
+        {% set row = namespace(number=1) %}
+        {% for summary_course in course_list %}
+          {% if summary_course.semester|string == summary_semester|string %}
+            {{ course_row(summary_course, row.number) }}
+            {% set row.number = row.number + 1 %}
+          {% endif %}
+        {% endfor %}
+
+        {% if show_total %}
+          <tr>
+            <th colspan="3" class="center">Total</th>
+            <td class="center">{{ total_cell(totals.lecture, totals.lecture_credit) }}</td>
+            <td class="center">{{ totals.tutorial }}</td>
+            <td class="center">{{ totals.practical }}</td>
+            <td class="center">{{ totals.self_study }}</td>
+            <td class="center">{{ totals.credits }}</td>
+            <td></td>
+            <td></td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  {% endif %}
+{%- endmacro %}
+
 {% set requested_semester = semester|string if semester is defined and semester else "" %}
 {% if summary_range | default("") != "final" %}
-  {% for summary_semester in [1, 2, 3, 4] %}
-    {% if not requested_semester or requested_semester == summary_semester|string %}
-    {% set totals = namespace(count=0, lecture=0, lecture_credit=0, tutorial=0, practical=0, self_study=0, credits=0) %}
-    {% for summary_course in course_list %}
-      {% if summary_course.semester|string == summary_semester|string %}
-        {% set credit_value = summary_course.credits|int %}
-        {% set totals.count = totals.count + 1 %}
-        {% set totals.lecture = totals.lecture + summary_course.lecture_hours|int %}
-        {% set totals.tutorial = totals.tutorial + summary_course.tutorial_hours|int %}
-        {% set totals.practical = totals.practical + summary_course.practical_hours|int %}
-        {% set totals.self_study = totals.self_study + summary_course.self_study|int %}
-        {% set totals.credits = totals.credits + credit_value %}
-        {% if credit_value > 0 %}
-          {% set totals.lecture_credit = totals.lecture_credit + summary_course.lecture_hours|int %}
-        {% endif %}
-      {% endif %}
-    {% endfor %}
-
-    {% if totals.count %}
-      <article class="summary-page">
-        <header class="letterhead">
-          <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
-          <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />
-        </header>
-        <h2 class="semester-title">{{ semester_name(summary_semester) }} SEMESTER {{ batch_label(summary_semester, curriculum_year) }}</h2>
-
-        <table class="meta summary-table">
-          <colgroup>
-            <col class="summary-number" />
-            <col class="summary-code" />
-            <col class="summary-title-column" />
-            <col class="summary-hour" />
-            <col class="summary-hour" />
-            <col class="summary-hour" />
-            <col class="summary-hour" />
-            <col class="summary-credit" />
-            <col class="summary-tools" />
-            <col class="summary-type" />
-          </colgroup>
-          <tbody>
-            <tr>
-              <th rowspan="2" class="center">Sl. No.</th>
-              <th rowspan="2">Course Code</th>
-              <th rowspan="2">Course Title</th>
-              <th colspan="4" class="center">Hours per week</th>
-              <th class="center nowrap">Credits</th>
-              <th rowspan="2">AI Tools / Tools / Languages</th>
-              <th rowspan="2">Course Type</th>
-            </tr>
-            <tr>
-              <th class="center">L</th>
-              <th class="center">T</th>
-              <th class="center">P</th>
-              <th class="center">S</th>
-              <th class="center">C</th>
-            </tr>
-
-            {% set row = namespace(number=1) %}
-            {% for summary_course in course_list %}
-              {% if summary_course.semester|string == summary_semester|string %}
-                {{ course_row(summary_course, row.number) }}
-                {% set row.number = row.number + 1 %}
-              {% endif %}
-            {% endfor %}
-
-            {% if summary_semester not in [1, 2] %}
-              <tr>
-                <th colspan="3" class="center">Total</th>
-                <td class="center">{{ total_cell(totals.lecture, totals.lecture_credit) }}</td>
-                <td class="center">{{ totals.tutorial }}</td>
-                <td class="center">{{ totals.practical }}</td>
-                <td class="center">{{ totals.self_study }}</td>
-                <td class="center">{{ totals.credits }}</td>
-                <td></td>
-                <td></td>
-              </tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </article>
+  {% set early = namespace(count=0) %}
+  {% for summary_course in course_list %}
+    {% if summary_course.semester|string in ["1", "2"] and (not requested_semester or requested_semester == summary_course.semester|string) %}
+      {% set early.count = early.count + 1 %}
     {% endif %}
+  {% endfor %}
+
+  {% if early.count %}
+    <article class="summary-page">
+      <header class="letterhead">
+        <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
+        <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />
+      </header>
+      {% for summary_semester in [1, 2] %}
+        {% if not requested_semester or requested_semester == summary_semester|string %}
+          {{ regular_table(summary_semester, false) }}
+        {% endif %}
+      {% endfor %}
+    </article>
+  {% endif %}
+
+  {% for summary_semester in [3, 4] %}
+    {% if not requested_semester or requested_semester == summary_semester|string %}
+      {% set current = namespace(count=0) %}
+      {% for summary_course in course_list %}
+        {% if summary_course.semester|string == summary_semester|string %}
+          {% set current.count = current.count + 1 %}
+        {% endif %}
+      {% endfor %}
+
+      {% if current.count %}
+        <article class="summary-page">
+          <header class="letterhead">
+            <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
+            <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />
+          </header>
+          {{ regular_table(summary_semester, true) }}
+        </article>
+      {% endif %}
     {% endif %}
   {% endfor %}
 {% endif %}

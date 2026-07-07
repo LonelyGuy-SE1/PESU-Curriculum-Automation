@@ -43,18 +43,19 @@ def build_course_preview(row: dict) -> dict:
         "self_study": row.get("self_study", content.get("self_study", 0)),
         "credits": row.get("credits", content.get("credits", 0)),
     }
-    if credit_category:
+    if credit_category and not any(hours.values()):
         hours = compute_hours(credit_category)
 
     program = row.get("program") or content.get("program") or ""
-    if target_department:
+    if target_department and not program:
         program = compute_program(target_department)
 
     course_type = row.get("course_type") or content.get("course_type") or ""
-    if credit_category:
+    if credit_category and not course_type:
         course_type = compute_course_type(credit_category)
 
     practical_hours = int(hours["practical_hours"] or 0)
+    status = str(row.get("status") or content.get("status") or "")
     return {
         "course_code": str(row.get("course_code") or content.get("course_code") or ""),
         "course_title": str(row.get("course_title") or content.get("course_title") or ""),
@@ -66,6 +67,8 @@ def build_course_preview(row: dict) -> dict:
         "credits": str(hours["credits"]),
         "semester": str(row.get("semester") or content.get("semester") or ""),
         "course_type": str(course_type),
+        "status": status,
+        "render_detail": status != "summary_only",
         "tools_languages": _text(row.get("tools_languages"), content.get("tools_languages"), submission.get("preferred_tools")),
         "desirable_knowledge": _text(row.get("desirable_knowledge"), content.get("desirable_knowledge")),
         "prelude": row.get("prelude") or content.get("prelude") or "",
