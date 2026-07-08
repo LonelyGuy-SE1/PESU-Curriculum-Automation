@@ -20,6 +20,8 @@ def extract_text(filename: str, content_type: str, data: bytes) -> tuple[str, st
             return _clean(_pdf_text(data)), "ready", ""
         if suffix == ".docx":
             return _clean(_docx_text(data)), "ready", ""
+        if suffix == ".xlsx":
+            return _clean(_xlsx_text(data)), "ready", ""
         if suffix in {".txt", ".md", ".csv"} or content_type.startswith("text/"):
             return _clean(_decode(data)), "ready", ""
         if content_type.startswith("image/"):
@@ -57,6 +59,21 @@ def _docx_text(data: bytes) -> str:
         if text:
             lines.append(text)
     return "\n".join(lines)
+
+
+def _xlsx_text(data: bytes) -> str:
+    import openpyxl
+    with tempfile.TemporaryDirectory() as temp_dir:
+        path = Path(temp_dir) / "upload.xlsx"
+        path.write_bytes(data)
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        rows = []
+        for sheet in wb:
+            for row in sheet.iter_rows(values_only=True):
+                line = "\t".join(str(c or "") for c in row)
+                if line.strip():
+                    rows.append(line)
+        return "\n".join(rows)
 
 
 def _decode(data: bytes) -> str:

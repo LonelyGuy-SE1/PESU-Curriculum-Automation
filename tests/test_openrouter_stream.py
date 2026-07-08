@@ -121,7 +121,7 @@ def test_stream_chat_runs_tool_calls(monkeypatch):
         return {"draft": {"id": 9, "status": "proposed"}}
 
     results = []
-    text = "".join(openrouter.stream_chat("system", [{"role": "user", "content": "update prelude"}], [{"type": "function"}], tool_runner, lambda n, r: results.append((n, r))))
+    text = "".join(item for item in openrouter.stream_chat("system", [{"role": "user", "content": "update prelude"}], [{"type": "function"}], tool_runner, lambda n, r: results.append((n, r))) if isinstance(item, str))
 
     assert text == "Draft 9 is ready for review."
     assert calls == [("create_course_draft", {"refined_id": 1, "fields": {"prelude": "Updated"}})]
