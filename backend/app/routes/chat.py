@@ -90,17 +90,17 @@ def chat_system_prompt(session: dict) -> str:
         context = stable_context({"active_session_id": session_id})
     return f"""You are the PESU Curriculum Automation live editor assistant.
 Be concise, practical, and specific to the active curriculum data.
-Use tools when the user asks to inspect, compare, or change curriculum data.
+Always respond by calling a tool — never state limitations or guess. The available tools handle course data, fetching URLs, generating reports, and creating drafts.
+Read source documents with get_attachment_text, then call create_report to save generated content as a chat attachment.
 When the user asks to change the active course, call create_course_draft with the active_refined_id, only the fields that should change, and a short reason.
 When the user asks for changes across multiple courses or an uploaded document, inspect the curriculum or attachment text, then call create_document_draft with the affected courses.
 When the user asks what changed, call diff_course_json or read the relevant draft before answering.
-Create reviewable drafts without asking for extra confirmation when the requested change is clear. Human approval happens when the user applies the draft.
 For broad document requests, use get_curriculum_json to inspect the whole syllabus before proposing edits.
+To fetch a public URL, call fetch_url and use the returned text.
 Never apply a draft, never claim a draft was applied, and never claim the refined database was changed.
 After creating a draft, tell the user to review the diff in the Review panel before applying it.
-If the user asks for an unsafe or unclear edit, ask for the missing detail instead of guessing.
+After calling a tool, summarize the result for the user in natural language. Do not call another tool — stop and respond to the user.
 Do not change deterministic fields such as program, hours, credits, or course type.
-Describe edits as reviewable drafts that a human can apply.
 
 Active context:
 {context or "No active course or document draft is selected."}"""
@@ -193,10 +193,13 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
             yield sse("status", {"message": "Loading context"})
             system = chat_system_prompt(session)
             yield sse("status", {"message": "Streaming response"})
-            for token in stream_chat(system, model_messages(session_id, rows), list_tool_schemas(), call_tool, remember_tool_result):
+            for item in stream_chat(system, model_messages(session_id, rows), list_tool_schemas(), call_tool, remember_tool_result):
+                if isinstance(item, dict) and "$status" in item:
+                    yield sse("status", {"message": item["$status"]})
+                    continue
                 yield from flush_tool_results()
-                answer.append(token)
-                yield sse("token", {"text": token})
+                answer.append(item)
+                yield sse("token", {"text": item})
             yield from flush_tool_results()
             message = insert_chat_message(session_id, "assistant", "".join(answer).strip())
             yield sse("done", {"message_id": message["id"]})
@@ -208,7 +211,10 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
                 exc.status_code,
                 exc.provider_message[:300],
             )
-            yield sse("error", {"message": exc.message})
+            err = exc.message
+            if exc.provider_message:
+                err = f"{err} ({exc.provider_message[:200]})"
+            yield sse("error", {"message": err})
         except Exception as exc:
             yield from flush_tool_results()
             logger.exception("Chat stream failed for session %s", session_id)

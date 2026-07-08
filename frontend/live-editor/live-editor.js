@@ -21,6 +21,7 @@ const renameChat = document.getElementById("rename-chat");
 const deleteChat = document.getElementById("delete-chat");
 const newChat = document.getElementById("new-chat");
 const chatLog = document.getElementById("chat-log");
+const chatStatus = document.getElementById("chat-status");
 const message = document.getElementById("message");
 const attach = document.getElementById("attach");
 const files = document.getElementById("files");
@@ -162,9 +163,9 @@ function chatScopeQuery() {
 }
 
 function sessionTitle(item) {
-  const title = item.title || `Thread ${item.id}`;
-  const created = item.created_at ? new Date(item.created_at).toLocaleString() : "";
-  return created ? `${title} - ${created}` : title;
+  if (item.title) return item.title;
+  const date = item.created_at ? new Date(item.created_at).toLocaleDateString() : "";
+  return date ? `Thread ${item.id} - ${date}` : `Thread ${item.id}`;
 }
 
 async function refreshChatSessions() {
@@ -341,36 +342,68 @@ function messageNode(item) {
   return { bubble, content };
 }
 
-function renderMessageContent(target, value) {
-  target.replaceChildren();
-  const text = String(value || "");
-  const pattern = /(\*\*[^*]+\*\*|`[^`]+`|https?:\/\/[^\s<>()]+)/g;
+function renderInline(parent, text) {
+  const pattern = /(\*\*[^*]+\*\*|`[^`]+`|https?:\/\/[^\s<>"']+)/g;
   let last = 0;
   for (const match of text.matchAll(pattern)) {
-    if (match.index > last) target.appendChild(document.createTextNode(text.slice(last, match.index)));
+    if (match.index > last) parent.appendChild(document.createTextNode(text.slice(last, match.index)));
     const token = match[0];
     if (token.startsWith("**")) {
       const strong = document.createElement("strong");
       strong.textContent = token.slice(2, -2);
-      target.appendChild(strong);
+      parent.appendChild(strong);
     } else if (token.startsWith("`")) {
       const code = document.createElement("code");
       code.textContent = token.slice(1, -1);
-      target.appendChild(code);
+      parent.appendChild(code);
     } else {
       const link = document.createElement("a");
-      const url = token.replace(/[.,;:)]}]+$/, "");
+      const url = token.replace(/[.,;:)}!?]+$/, "").replace(/[<>]+/g, "");
       const trailing = token.slice(url.length);
       link.href = url;
       link.target = "_blank";
       link.rel = "noreferrer";
       link.textContent = url;
-      target.appendChild(link);
-      if (trailing) target.appendChild(document.createTextNode(trailing));
+      parent.appendChild(link);
+      if (trailing) parent.appendChild(document.createTextNode(trailing));
     }
     last = match.index + token.length;
   }
-  if (last < text.length) target.appendChild(document.createTextNode(text.slice(last)));
+  if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+}
+
+function renderMessageContent(target, value) {
+  target.replaceChildren();
+  const text = String(value || "");
+  const lines = text.split("\n");
+  let inList = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed) {
+      inList = false;
+      continue;
+    }
+    if (/^---+$/.test(trimmed)) {
+      if (inList) inList = false;
+      target.appendChild(document.createElement("hr"));
+      continue;
+    }
+    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      if (!inList) {
+        inList = true;
+        target.appendChild(document.createElement("ul"));
+      }
+      const li = document.createElement("li");
+      renderInline(li, trimmed.slice(2));
+      target.lastElementChild.appendChild(li);
+      continue;
+    }
+    if (inList) inList = false;
+    const block = document.createElement("div");
+    renderInline(block, line);
+    target.appendChild(block);
+  }
 }
 
 function appendMessage(item) {
@@ -664,11 +697,13 @@ async function loadDocumentPreview() {
   activeCourseId = "";
   activeDraftId = "";
   versionMode = false;
+  viewMode.value = "document";
   save.disabled = true;
   course.disabled = true;
   semester.disabled = true;
   editor.value = "";
   resetReview();
+  chatStatus.textContent = "";
   loading.classList.add("active");
   viewer.src = "/api/preview/pdf";
   preview.href = "/api/preview/pdf";
@@ -792,7 +827,7 @@ send.addEventListener("click", async () => {
 
     let answer = "";
     await readEventStream(response, ({ event, data }) => {
-      if (event === "status") setStatus(data.message || "");
+      if (event === "status") { chatStatus.textContent = data.message || ""; }
       if (event === "token") {
         if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
         answer += data.text || "";
@@ -810,10 +845,11 @@ send.addEventListener("click", async () => {
         loadDocumentDraftById(data.document_draft.id).catch(showError);
       }
       if (event === "error") throw new Error(data.message || "Chat failed");
-      if (event === "done") setStatus("Response saved.", "ready");
+      if (event === "done") { chatStatus.textContent = ""; setStatus("Response saved.", "ready"); }
     });
   } catch (error) {
     const text = error instanceof Error ? error.message : "Chat failed";
+    chatStatus.textContent = text;
     setStatus(text, "error");
     if (assistant) {
       assistant.bubble.classList.add("error");
@@ -889,7 +925,7 @@ window.addEventListener("unhandledrejection", (event) => {
 
 const initialVersion = initialParams.get("version");
 const initialCourse = initialParams.get("course");
-const initialLoad = initialVersion && initialCourse ? loadVersionCourse(initialVersion, initialCourse) : firstAvailableSemester().then(loadSemester);
+const initialLoad = initialVersion && initialCourse ? loadVersionCourse(initialVersion, initialCourse) : loadDocumentPreview();
 
 Promise.all([refreshVersions(), initialLoad]).catch(() => {
   loading.classList.remove("active");

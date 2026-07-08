@@ -34,7 +34,7 @@
         <button id="restore-version" type="button">Restore</button>
       </div>
 
-      <span class="status-line" id="status" role="status"></span>
+      <span class="status-line" id="status" role="status" hidden></span>
     </header>
 
     <main class="workspace">
@@ -65,6 +65,7 @@
             <button class="danger" id="delete-chat" type="button">Delete</button>
             <button id="new-chat" type="button">New</button>
           </div>
+          <div class="chat-status" id="chat-status" role="status"></div>
           <div class="chat-log" id="chat-log" aria-live="polite"></div>
           <div class="composer">
             <div class="attachments" id="draft-attachments"></div>
@@ -89,11 +90,11 @@
           <div class="document-draft">
             <div class="draft-loader">
               <select id="course-draft-select" aria-label="Course draft"></select>
-              <button id="load-course-draft" type="button">Load Course</button>
+              <button id="load-course-draft" type="button" title="Load single‑course draft from agent">Load Course</button>
             </div>
             <div class="draft-loader">
               <select id="document-draft-select" aria-label="Document draft"></select>
-              <button id="load-document-draft" type="button">Load Document</button>
+              <button id="load-document-draft" type="button" title="Load multi‑course document draft from agent">Load Document</button>
             </div>
           </div>
           <div class="review-summary" id="review-summary"></div>

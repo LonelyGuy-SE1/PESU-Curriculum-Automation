@@ -1,6 +1,8 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
+import httpx
+
 from app.services.curriculum import draft_record, load_agent_draft, load_document_draft, ordered_courses, refined_course
 from app.services.diffing import diff_course
 from app.supabase import supabase
@@ -144,6 +146,38 @@ def _list_courses(arguments: dict) -> dict:
     return {"courses": rows}
 
 
+def _fetch_url(arguments: dict) -> dict:
+    url = str(arguments.get("url") or "").strip()
+    if not url:
+        raise ValueError("url is required")
+    resp = httpx.get(url, timeout=30, follow_redirects=True)
+    resp.raise_for_status()
+    text = resp.text[:15000]
+    return {"url": url, "text": text, "chars": len(text)}
+
+
+def _create_report(arguments: dict) -> dict:
+    session_id = _require_int(arguments, "session_id")
+    content = str(arguments.get("content") or "").strip()
+    if not content:
+        raise ValueError("content is required")
+    filename = str(arguments.get("filename") or "report.md").strip()
+    row = (
+        supabase.table("chat_attachments")
+        .insert({
+            "session_id": session_id,
+            "filename": filename,
+            "content_type": "text/markdown",
+            "size_bytes": len(content.encode()),
+            "extracted_text": content,
+            "status": "ready",
+        })
+        .execute()
+        .data[0]
+    )
+    return {"attachment": {"id": row["id"], "filename": row["filename"], "chars": len(content)}}
+
+
 def _attachment_text(arguments: dict) -> dict:
     session_id = _require_int(arguments, "session_id")
     ids = [int(value) for value in arguments.get("attachment_ids") or []]
@@ -261,5 +295,25 @@ TOOLS: dict[str, AgentTool] = {
             "required": ["session_id", "attachment_ids"],
         },
         _attachment_text,
+    ),
+    "fetch_url": AgentTool(
+        "fetch_url",
+        "Fetch a public URL and return its text content. Use to read web pages, public documents, and online resources.",
+        {**OBJECT, "properties": {"url": {"type": "string"}}, "required": ["url"]},
+        _fetch_url,
+    ),
+    "create_report": AgentTool(
+        "create_report",
+        "Save a generated document (report, comparison, summary, etc.) as a chat attachment accessible to the user. Use after reading source documents and generating new content.",
+        {
+            **OBJECT,
+            "properties": {
+                "session_id": {"type": "integer"},
+                "content": {"type": "string", "description": "Full report/document content in markdown format"},
+                "filename": {"type": "string", "description": "Filename including extension, e.g. comparison-report.md"},
+            },
+            "required": ["session_id", "content"],
+        },
+        _create_report,
     ),
 }
