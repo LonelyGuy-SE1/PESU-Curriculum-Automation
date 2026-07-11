@@ -490,6 +490,12 @@ iframe {
   gap: 8px;
 }
 
+.draft-loader select {
+  max-width: none;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .diff-view {
   min-height: 0;
   overflow: auto;

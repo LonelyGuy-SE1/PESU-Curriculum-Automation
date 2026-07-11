@@ -126,6 +126,8 @@ def restore_version(version_id: int):
             supabase.table("course_revision_history").insert(history).execute()
         if extra_ids:
             supabase.table("refined_submissions").update({"status": "archived"}).in_("id", extra_ids).execute()
+        supabase.table("agent_drafts").update({"status": "proposed"}).eq("status", "applied").execute()
+        supabase.table("agent_document_drafts").update({"status": "proposed"}).eq("status", "applied").execute()
     except APIError as exc:
         raise database_http_exception(exc) from exc
     return {"message": "Version restored", "version": version, "courses_restored": restored, "courses_archived": len(extra_ids)}

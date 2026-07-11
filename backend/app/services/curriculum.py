@@ -101,6 +101,22 @@ def elective_order(code: str, first_group: str, second_group: str) -> int | None
     return None
 
 
+def create_version_snapshot(name: str) -> dict:
+    rows = supabase.table("refined_submissions").select("*").execute().data
+    rows = attach_submissions(rows)
+    courses = [{"refined_id": row["id"], "course_json": build_course_preview(row)} for row in rows]
+    program = courses[0]["course_json"].get("program") if courses else ""
+    version = (
+        supabase.table("curriculum_versions")
+        .insert({"name": name, "program": program, "academic_year": selected_curriculum_year(), "status": "draft"})
+        .execute().data[0]
+    )
+    if courses:
+        records = [{**course, "curriculum_version_id": version["id"]} for course in courses]
+        supabase.table("finalized_submissions").insert(records).execute()
+    return version
+
+
 def selected_curriculum_year(value: str | None = None) -> str:
     return str(value or "").strip() or DEFAULT_CURRICULUM_YEAR
 

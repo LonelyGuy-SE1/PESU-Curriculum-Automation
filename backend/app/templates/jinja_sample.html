@@ -250,6 +250,55 @@
         font-weight: 700;
       }
 
+      .diff-label {
+        text-align: center;
+        font-size: 13pt;
+        font-weight: 700;
+        padding: 6pt 0;
+        margin-bottom: 8pt;
+        border: 2pt solid #6b7280;
+        border-radius: 4pt;
+        color: #374151;
+        background: #f9fafb;
+      }
+
+      .diff-changes {
+        margin: 8mm 0;
+        font-size: 10pt;
+      }
+      .diff-changes summary {
+        cursor: pointer;
+        font-weight: 700;
+        margin-bottom: 4pt;
+      }
+      .diff-changes table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+      }
+      .diff-changes th, .diff-changes td {
+        border: 1px solid #d1d5db;
+        padding: 4pt 6pt;
+        text-align: left;
+        vertical-align: top;
+      }
+      .diff-changes th {
+        background: #f3f4f6;
+      }
+      .diff-changes .old-val {
+        color: #b91c1c;
+      }
+      .diff-changes .new-val {
+        color: #15803d;
+      }
+      .diff-course-header {
+        font-weight: 700;
+        background: #f9fafb;
+        padding: 6pt 0;
+        margin-top: 6mm;
+        border-bottom: 1px solid #d1d5db;
+      }
+
       .footer-bar {
         position: fixed;
         left: 0;
@@ -264,6 +313,31 @@
     <div class="footer-bar"></div>
     {% set course_list = courses if courses is defined else [course] %}
     {% if course_list %}
+      {% if diff_changes is defined and diff_changes %}
+      <div class="diff-changes">
+        <details open>
+          <summary>Changed fields ({{ diff_changes|length }})</summary>
+          {% if diff_changes[0].course is defined %}
+            {% for group in diff_changes %}
+            <div class="diff-course-header">{{ group.course }}</div>
+            <table>
+              <tr><th>Field</th><th>Old Value</th><th>New Value</th></tr>
+              {% for c in group.changes %}
+              <tr><td>{{ c.field }}</td><td class="old-val">{{ c.old }}</td><td class="new-val">{{ c.new }}</td></tr>
+              {% endfor %}
+            </table>
+            {% endfor %}
+          {% else %}
+            <table>
+              <tr><th>Field</th><th>Old Value</th><th>New Value</th></tr>
+              {% for c in diff_changes %}
+              <tr><td>{{ c.field }}</td><td class="old-val">{{ c.old }}</td><td class="new-val">{{ c.new }}</td></tr>
+              {% endfor %}
+            </table>
+          {% endif %}
+        </details>
+      </div>
+      {% endif %}
       {% if show_summaries | default(false) %}
         {% set summary_range = "early" %}
         {% include "jinja_1_to_8.html" %}
@@ -274,6 +348,9 @@
       {% for course in course_list %}
         {% if not show_summaries | default(false) or course.render_detail | default(true) %}
         <article class="course">
+          {% if course._version_label %}
+          <div class="diff-label">{{ course._version_label }}</div>
+          {% endif %}
           <header class="letterhead">
             <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
             <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />

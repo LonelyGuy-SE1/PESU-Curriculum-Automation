@@ -1,8 +1,5 @@
 const version = document.getElementById("version");
-const course = document.getElementById("course");
-const previewVersion = document.getElementById("preview-version");
 const openEditor = document.getElementById("open-editor");
-const previewLink = document.getElementById("preview-link");
 const snapshotForm = document.getElementById("snapshot-form");
 const versionName = document.getElementById("version-name");
 const statusText = document.getElementById("status");
@@ -10,7 +7,8 @@ const viewer = document.getElementById("viewer");
 
 function setStatus(text, kind = "") {
   statusText.textContent = text || "";
-  statusText.className = `status-line ${kind}`.trim();
+  statusText.className = kind;
+  statusText.hidden = !text;
 }
 
 function option(value, text) {
@@ -27,55 +25,22 @@ async function json(url, options) {
   return body;
 }
 
-function versionLabel(item) {
-  return item.name || `Snapshot ${item.id}`;
-}
-
-function courseLabel(item) {
-  const code = item.course_code ? `${item.course_code} - ` : "";
-  const sem = item.semester ? `S${item.semester} ` : "";
-  return `${sem}${code}${item.course_title || `Course ${item.refined_id}`}`;
-}
-
 async function loadVersions() {
   const body = await json("/api/versions");
-  version.replaceChildren(...(body.versions || []).map((item) => option(item.id, versionLabel(item))));
-  if (!version.value) {
-    setStatus("No snapshots saved.");
-    return;
-  }
-  await loadVersion();
+  version.replaceChildren(...(body.versions || []).map((item) => option(item.id, item.name || `Snapshot ${item.id}`)));
+  setStatus(body.versions?.length ? "Select a version to preview." : "No snapshots saved.");
+  viewer.src = "/api/preview/pdf";
 }
 
-async function loadVersion() {
-  const body = await json(`/api/versions/${version.value}`);
-  course.replaceChildren(...(body.courses || []).map((item) => option(item.refined_id, courseLabel(item))));
-  showVersionPreview();
-  setStatus(body.courses?.length ? `${body.courses.length} courses in snapshot.` : "Snapshot has no courses.", body.courses?.length ? "ready" : "");
-}
-
-function showVersionPreview() {
+version.addEventListener("change", () => {
   if (!version.value) return;
-  previewLink.href = `/api/versions/${version.value}/preview`;
-  viewer.src = previewLink.href;
-}
-
-function showCoursePreview() {
-  if (!version.value || !course.value) return;
-  previewLink.href = `/api/versions/${version.value}/courses/${course.value}/preview`;
-  viewer.src = previewLink.href;
-}
-
-version.addEventListener("change", loadVersion);
-previewVersion.addEventListener("click", showVersionPreview);
-
-course.addEventListener("change", () => {
-  showCoursePreview();
+  viewer.src = `/api/versions/${version.value}/preview`;
+  setStatus(`Viewing snapshot ${version.value}`);
 });
 
 openEditor.addEventListener("click", () => {
-  if (!version.value || !course.value) return;
-  location.href = `../live-editor/?version=${encodeURIComponent(version.value)}&course=${encodeURIComponent(course.value)}`;
+  if (!version.value) return;
+  location.href = `../live-editor/?version=${encodeURIComponent(version.value)}&course=1`;
 });
 
 snapshotForm.addEventListener("submit", async (event) => {

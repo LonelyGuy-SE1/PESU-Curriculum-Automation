@@ -40,6 +40,7 @@ const previewDraft = document.getElementById("preview-draft");
 const applyDraft = document.getElementById("apply-draft");
 let activeCourseId = "";
 let activeDraftId = "";
+let activeDocumentDraftId = "";
 let activeSessionId = "";
 let queuedFiles = [];
 let versionMode = false;
@@ -48,6 +49,7 @@ const initialParams = new URLSearchParams(location.search);
 function setStatus(text, kind = "") {
   statusText.textContent = text || "";
   statusText.className = kind;
+  statusText.hidden = !text;
 }
 
 function showError(error, fallback = "Action failed.") {
@@ -449,6 +451,7 @@ async function readEventStream(response, onEvent) {
 
 function resetReview() {
   activeDraftId = "";
+  activeDocumentDraftId = "";
   reviewSummary.replaceChildren(document.createTextNode("No draft loaded."));
   renderDiff("");
   previewDraft.disabled = true;
@@ -526,8 +529,7 @@ function renderDraftReview(draftRow) {
 
 function showCourseDraft(draftRow) {
   renderDraftReview(draftRow);
-  viewer.src = `/api/agent/drafts/${draftRow.id}/preview`;
-  preview.href = `/api/agent/drafts/${draftRow.id}/preview`;
+  viewer.src = `/api/agent/drafts/${draftRow.id}/preview?diff=1`;
   setStatus("Draft ready for review.", "ready");
   refreshDraftSelectors().catch(showError);
   setTab("review");
@@ -551,6 +553,7 @@ async function loadDocumentDraftById(id) {
   const body = await response.json();
   const summary = body.document_draft.diff_summary || {};
   activeDraftId = "";
+  activeDocumentDraftId = String(id);
   reviewSummary.replaceChildren(
     summaryLine("Document draft", id),
     summaryLine("Status", body.document_draft.status || ""),
@@ -564,10 +567,9 @@ async function loadDocumentDraftById(id) {
       .map((item) => `Course draft ${item.id}\n${item.diff_summary?.unified_diff || ""}`)
       .join("\n\n"),
   );
-  previewDraft.disabled = true;
-  applyDraft.disabled = true;
-  viewer.src = `/api/agent/document-drafts/${id}/preview`;
-  preview.href = `/api/agent/document-drafts/${id}/preview`;
+  previewDraft.disabled = false;
+  applyDraft.disabled = body.document_draft.status !== "proposed" || Boolean(summary.courses_with_protected_changes);
+  viewer.src = `/api/agent/document-drafts/${id}/preview?diff=1`;
   await refreshDraftSelectors();
   documentDraftSelect.value = String(id);
   setTab("review");
@@ -592,11 +594,11 @@ async function refreshDraftSelectors() {
   ]);
   if (courseResponse.ok) {
     const body = await courseResponse.json();
-    courseDraftSelect.replaceChildren(...(body.drafts || []).map((item) => option(String(item.id), courseDraftLabel(item))));
+    courseDraftSelect.replaceChildren(...(body.drafts || []).filter((item) => item.status !== "applied").map((item) => option(String(item.id), courseDraftLabel(item))));
   }
   if (documentResponse.ok) {
     const body = await documentResponse.json();
-    documentDraftSelect.replaceChildren(...(body.document_drafts || []).map((item) => option(String(item.id), documentDraftLabel(item))));
+    documentDraftSelect.replaceChildren(...(body.document_drafts || []).filter((item) => item.status !== "applied").map((item) => option(String(item.id), documentDraftLabel(item))));
   }
   if (activeDraftId) courseDraftSelect.value = activeDraftId;
 }
@@ -661,7 +663,6 @@ async function loadCourse(id) {
   const row = await response.json();
   editor.value = JSON.stringify(row.fields || {}, null, 2);
   viewer.src = `/api/preview/course/${id}`;
-  preview.href = `/api/preview/course/${id}`;
   const title = row.fields?.course_title || `Course ${id}`;
   setStatus(title);
   const selected = course.querySelector(`option[value="${id}"]`);
@@ -685,7 +686,6 @@ async function loadVersionCourse(versionId, refinedId) {
   const body = await response.json();
   editor.value = JSON.stringify(body.fields || {}, null, 2);
   viewer.src = `/api/versions/${versionId}/courses/${refinedId}/preview`;
-  preview.href = viewer.src;
   setStatus(`${body.version.name}: ${body.fields?.course_title || `Course ${refinedId}`}`);
   queuedFiles = [];
   renderDraftAttachments();
@@ -704,9 +704,7 @@ async function loadDocumentPreview() {
   editor.value = "";
   resetReview();
   chatStatus.textContent = "";
-  loading.classList.add("active");
   viewer.src = "/api/preview/pdf";
-  preview.href = "/api/preview/pdf";
   setStatus("Full Document");
   await ensureChatSession();
   await renderMessages();
@@ -719,7 +717,6 @@ async function loadSemester(sem) {
   course.replaceChildren();
   editor.value = "";
   viewer.removeAttribute("src");
-  preview.removeAttribute("href");
   loading.classList.add("active");
   setStatus("Loading...");
 
@@ -738,6 +735,9 @@ chatTab.addEventListener("click", () => setTab("chat"));
 fieldsTab.addEventListener("click", () => setTab("fields"));
 reviewTab.addEventListener("click", () => setTab("review"));
 viewer.addEventListener("load", () => loading.classList.remove("active"));
+preview.addEventListener("click", () => {
+  if (viewer.src && viewer.src !== "about:blank") viewer.src = viewer.src;
+});
 semester.addEventListener("change", () => loadSemester(semester.value).catch(showError));
 course.addEventListener("change", () => loadCourse(course.value).catch(showError));
 viewMode.addEventListener("change", async () => {
@@ -878,14 +878,28 @@ draft.addEventListener("click", async () => {
 });
 
 previewDraft.addEventListener("click", () => {
+  if (activeDocumentDraftId) {
+    viewer.src = `/api/agent/document-drafts/${activeDocumentDraftId}/preview`;
+    return;
+  }
   if (!activeDraftId) return;
   viewer.src = `/api/agent/drafts/${activeDraftId}/preview`;
-  preview.href = `/api/agent/drafts/${activeDraftId}/preview`;
 });
 
 applyDraft.addEventListener("click", async () => {
-  if (!activeDraftId) return;
+  if (!activeDraftId && !activeDocumentDraftId) return;
   setStatus("Applying draft...");
+
+  if (activeDocumentDraftId) {
+    const response = await fetch(`/api/agent/document-drafts/${activeDocumentDraftId}/apply`, { method: "POST" });
+    if (!response.ok) {
+      throw new Error(await errorMessage(response, "Apply failed"));
+    }
+    await loadDocumentDraftById(activeDocumentDraftId);
+    setStatus("Document draft applied.", "ready");
+    return;
+  }
+
   const response = await fetch(`/api/agent/drafts/${activeDraftId}/apply`, { method: "POST" });
   if (!response.ok) {
     throw new Error(await errorMessage(response, "Apply failed"));

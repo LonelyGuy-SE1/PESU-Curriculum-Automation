@@ -56,7 +56,7 @@ def test_live_editor_uses_external_assets():
 def test_versions_page_uses_snapshot_language():
     text = Path("frontend/versions/index.html").read_text()
 
-    assert "Snapshot Label" in text
+    assert "Snapshot label" in text
     assert "Academic Year" not in text
 
 

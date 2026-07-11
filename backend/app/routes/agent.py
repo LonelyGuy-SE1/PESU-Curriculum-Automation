@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 from postgrest.exceptions import APIError
@@ -5,12 +7,35 @@ from postgrest.exceptions import APIError
 from app.models.agent import AgentDocumentDraftPayload, AgentDraftPayload, AgentToolPayload
 from app.rendering import templates
 from app.services.agent_tools import call_tool, list_tool_schemas
-from app.services.curriculum import draft_record, load_agent_draft, load_document_draft, selected_curriculum_year, update_refined_fields
+from app.services.curriculum import create_version_snapshot, draft_record, load_agent_draft, load_document_draft, selected_curriculum_year, update_refined_fields
 from app.services.diffing import diff_course
 from app.services.errors import database_http_exception
 from app.supabase import supabase
 
 router = APIRouter()
+
+
+def _changed_fields(base: dict, proposed: dict) -> list[dict]:
+    changes = []
+    all_keys = set(base.keys()) | set(proposed.keys())
+    for key in sorted(all_keys):
+        if key.startswith("_"):
+            continue
+        old = base.get(key)
+        new = proposed.get(key)
+        if old != new:
+            label = key.replace("_", " ").title()
+            changes.append({"field": label, "old": _fmt(old), "new": _fmt(new)})
+    return changes
+
+
+def _fmt(v) -> str:
+    if isinstance(v, list):
+        return ", ".join(
+            str(x) if not isinstance(x, dict) else x.get("title", str(x)[:80])
+            for x in v
+        )
+    return str(v) if v is not None else ""
 
 
 @router.post("/agent/diff")
@@ -67,14 +92,26 @@ def get_agent_draft(draft_id: int):
 
 
 @router.get("/agent/drafts/{draft_id}/preview")
-def preview_agent_draft(draft_id: int):
+def preview_agent_draft(draft_id: int, diff: bool = False):
     try:
         draft = load_agent_draft(draft_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except APIError as exc:
         raise database_http_exception(exc) from exc
-    html = templates.get_template("jinja_sample.html").render(course=draft["proposed_json"], curriculum_year=selected_curriculum_year(), asset_root="/")
+
+    if diff:
+        base = dict(draft.get("base_refined_json") or {})
+        proposed = dict(draft.get("proposed_json") or {})
+        changes = _changed_fields(base, proposed)
+        html = templates.get_template("jinja_sample.html").render(
+            courses=[base, proposed],
+            diff_changes=changes,
+            curriculum_year=selected_curriculum_year(),
+            asset_root="/",
+        )
+    else:
+        html = templates.get_template("jinja_sample.html").render(course=draft["proposed_json"], curriculum_year=selected_curriculum_year(), asset_root="/")
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
@@ -107,9 +144,10 @@ def apply_agent_draft(draft_id: int):
         ).execute()
         data = update_refined_fields(int(draft["refined_id"]), draft["proposed_json"])
         supabase.table("agent_drafts").update({"status": "applied"}).eq("id", draft_id).execute()
+        version = create_version_snapshot(f"Auto-save before draft #{draft_id} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
     except APIError as exc:
         raise database_http_exception(exc) from exc
-    return {"message": "Draft applied", "data": data}
+    return {"message": "Draft applied", "data": data, "version": version}
 
 
 @router.post("/agent/document-drafts")
@@ -173,6 +211,53 @@ def list_agent_document_drafts():
     }
 
 
+@router.post("/agent/document-drafts/{document_draft_id}/apply")
+def apply_agent_document_draft(document_draft_id: int):
+    try:
+        result = load_document_draft(document_draft_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
+
+    document = result["document_draft"]
+    drafts = result["drafts"]
+
+    if document.get("status") != "proposed":
+        raise HTTPException(status_code=400, detail="Only proposed document drafts can be applied")
+
+    summary = document.get("diff_summary") or {}
+    if summary.get("courses_with_protected_changes"):
+        raise HTTPException(status_code=400, detail="Document draft contains protected field changes")
+
+    applied = []
+    for draft in drafts:
+        if draft.get("status") != "proposed":
+            continue
+        try:
+            supabase.table("course_revision_history").insert(
+                {
+                    "refined_id": draft["refined_id"],
+                    "agent_draft_id": draft["id"],
+                    "previous_json": draft["base_refined_json"],
+                    "next_json": draft["proposed_json"],
+                    "json_patch": draft["json_patch"],
+                    "diff_summary": draft["diff_summary"],
+                    "change_reason": draft.get("change_reason") or "",
+                }
+            ).execute()
+            update_refined_fields(int(draft["refined_id"]), draft["proposed_json"])
+            supabase.table("agent_drafts").update({"status": "applied"}).eq("id", draft["id"]).execute()
+            applied.append(draft["id"])
+        except APIError as exc:
+            raise database_http_exception(exc) from exc
+
+    supabase.table("agent_document_drafts").update({"status": "applied"}).eq("id", document_draft_id).execute()
+    version = create_version_snapshot(f"Auto-save before document draft #{document_draft_id} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+    return {"message": f"Applied {len(applied)} drafts", "applied_draft_ids": applied, "version": version}
+
+
 @router.get("/agent/document-drafts/{document_draft_id}")
 def get_agent_document_draft(document_draft_id: int):
     try:
@@ -184,27 +269,35 @@ def get_agent_document_draft(document_draft_id: int):
 
 
 @router.get("/agent/document-drafts/{document_draft_id}/preview")
-def preview_agent_document_draft(document_draft_id: int):
+def preview_agent_document_draft(document_draft_id: int, diff: bool = False):
     try:
-        drafts = load_document_draft(document_draft_id)["drafts"]
+        result = load_document_draft(document_draft_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except APIError as exc:
         raise database_http_exception(exc) from exc
+    drafts = result["drafts"]
     if not drafts:
         raise HTTPException(status_code=404, detail="Document draft not found")
 
-    courses = sorted(
-        (draft["proposed_json"] for draft in drafts),
-        key=lambda course: (int(course.get("semester") or 0), str(course.get("course_code") or ""), str(course.get("course_title") or "")),
-    )
-    html = templates.get_template("jinja_sample.html").render(
-        courses=courses,
-        semester="",
-        curriculum_year=selected_curriculum_year(),
-        asset_root="/",
-        show_summaries=True,
-    )
+    if diff:
+        courses = []
+        all_changes = []
+        for child in drafts:
+            base = dict(child.get("base_refined_json") or {})
+            proposed = dict(child.get("proposed_json") or {})
+            course_title = proposed.get("course_title") or base.get("course_title") or f"Course #{child.get('refined_id')}"
+            changes = _changed_fields(base, proposed)
+            if changes:
+                all_changes.append({"course": course_title, "changes": changes})
+            courses.extend([base, proposed])
+        html = templates.get_template("jinja_sample.html").render(courses=courses, diff_changes=all_changes, semester="", curriculum_year=selected_curriculum_year(), asset_root="/")
+    else:
+        courses = sorted(
+            (draft["proposed_json"] for draft in drafts),
+            key=lambda course: (int(course.get("semester") or 0), str(course.get("course_code") or ""), str(course.get("course_title") or "")),
+        )
+        html = templates.get_template("jinja_sample.html").render(courses=courses, semester="", curriculum_year=selected_curriculum_year(), asset_root="/", show_summaries=True)
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
