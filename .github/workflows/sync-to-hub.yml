@@ -1,19 +1,28 @@
-name: Sync to Hugging Face Hub
+name: Sync to Hugging Face
+
 on:
   push:
     branches: [main]
 
-permissions:
-  contents: read
-
 jobs:
   sync:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v6
-      - uses: huggingface/hub-sync@v0.1.0
-        with:
-          github_repo_id: ${{ github.repository }}
-          huggingface_repo_id: Lonelyguyse1/Curriculum-Backend
-          hf_token: ${{ secrets.HF_TOKEN }}
-          space_sdk: docker
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install Hugging Face CLI
+        run: uv tool install "huggingface_hub[cli]"
+
+      - name: Upload Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          hf upload \
+            Lonelyguyse1/Curriculum-Backend \
+            . \
+            / \
+            --repo-type space \
+            --token "$HF_TOKEN"
