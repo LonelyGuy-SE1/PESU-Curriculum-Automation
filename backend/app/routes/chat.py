@@ -102,6 +102,18 @@ After creating a draft, tell the user to review the diff in the Review panel bef
 After calling a tool, summarize the result for the user in natural language. Do not call another tool — stop and respond to the user.
 Do not change deterministic fields such as program, hours, credits, or course type.
 
+Course data access — prefer granular tools over full JSON:
+- get_course_codes: lightweight IDs (refined_id, course_code, title, semester) — use for lists/lookups
+- get_course_syllabus: units, objectives, course_outcomes
+- get_course_textbooks: text_books, reference_books
+- get_course_deterministic: program, hours, credits, course_type (read-only, agent-protected)
+- get_course_lab: lab_experiments, tools_languages
+- get_course_fields: arbitrary specific fields (provide field name list)
+- get_current_course_json: full course JSON — only use when you truly need everything
+
+When the user's request is fully addressed (draft created, question answered, report generated), call signal_done with a concise summary of what was accomplished.
+Use create_curriculum_version to checkpoint the curriculum state after a coherent set of changes (e.g., after applying drafts, or when user asks to save a version). Provide a descriptive name in conventional commit style (e.g., "feat: add Unit 5 to CS201", "fix: correct credits for ECE301").
+
 Active context:
 {context or "No active course or document draft is selected."}"""
 
@@ -117,6 +129,20 @@ def model_messages(session_id: int, rows: list[dict]) -> list[dict]:
             content = f"{content}\n\n{context}".strip()
         if content:
             messages.append({"role": row["role"], "content": content})
+
+    MAX_CONTENT_CHARS = 20000
+    total = sum(len(m["content"]) for m in messages)
+    if total > MAX_CONTENT_CHARS and len(messages) >= 2:
+        while total > MAX_CONTENT_CHARS and len(messages) >= 2:
+            removed_user = messages.pop(0)
+            total -= len(removed_user["content"])
+            if messages:
+                removed_assistant = messages.pop(0)
+                total -= len(removed_assistant["content"])
+        messages.insert(0, {
+            "role": "user",
+            "content": "[Earlier conversation context has been truncated to manage token usage]"
+        })
     return messages
 
 
@@ -128,7 +154,24 @@ def sse(event: str, data: dict) -> str:
 def create_chat_session(payload: ChatSessionPayload):
     record = {"refined_id": payload.refined_id, "document_draft_id": payload.document_draft_id, "title": payload.title.strip()}
     result = supabase.table("chat_sessions").insert(record).execute()
-    return {"session": result.data[0]}
+    session = result.data[0]
+    session_id = session["id"]
+
+    if payload.refined_id:
+        starter = f"👋 Hello! I'm ready to help with course **{payload.title}** (refined_id: {payload.refined_id}). You can ask me to:\n\n- Create a draft with specific changes\n- Explain the current syllabus structure\n- Compare with other courses\n- Fetch textbook details or lab experiments\n\nWhat would you like to do?"
+    elif payload.document_draft_id:
+        starter = f"👋 Hello! I'm ready to help with document draft **{payload.document_draft_id}**. You can ask me to:\n\n- Review the proposed changes across multiple courses\n- Compare draft versions\n- Generate a summary report\n\nWhat would you like to do?"
+    else:
+        starter = "👋 Hello! I'm your PESU Curriculum assistant. You can ask me to:\n\n- Browse the curriculum with `get_curriculum_json`\n- Inspect specific courses with granular tools\n- Create drafts for course changes\n- Generate reports and comparisons\n\nWhat would you like to explore?"
+
+    supabase.table("chat_messages").insert({
+        "session_id": session_id,
+        "role": "assistant",
+        "content": starter,
+        "metadata": {"starter": True}
+    }).execute()
+
+    return {"session": session}
 
 
 @router.get("/chat/sessions")
@@ -182,10 +225,14 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
                 item = tool_results.pop(0)
                 draft = (item["result"] or {}).get("draft")
                 document_draft = (item["result"] or {}).get("document_draft")
+                done = (item["result"] or {}).get("done")
+                summary = (item["result"] or {}).get("summary")
                 if item["name"] == "create_course_draft" and draft:
                     yield sse("draft", {"draft": draft})
                 if item["name"] == "create_document_draft" and document_draft:
                     yield sse("document_draft", {"document_draft": document_draft})
+                if item["name"] == "signal_done" and done:
+                    yield sse("done", {"message": "Agent completed task", "summary": summary})
 
         try:
             yield sse("status", {"message": "Message saved"})
@@ -196,6 +243,11 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
             for item in stream_chat(system, model_messages(session_id, rows), list_tool_schemas(), call_tool, remember_tool_result):
                 if isinstance(item, dict) and "$status" in item:
                     yield sse("status", {"message": item["$status"]})
+                    continue
+                if isinstance(item, dict) and "$event" in item:
+                    event = item["$event"]
+                    data = {k: v for k, v in item.items() if k != "$event"}
+                    yield sse(event, data)
                     continue
                 yield from flush_tool_results()
                 answer.append(item)

@@ -30,8 +30,8 @@ const send = document.getElementById("send");
 const editor = document.getElementById("editor");
 const draft = document.getElementById("draft");
 const save = document.getElementById("save");
-const courseDraftSelect = document.getElementById("course-draft-select");
-const loadCourseDraft = document.getElementById("load-course-draft");
+const courseDraftSelect = document.getElementById("course-draft-select"); // commented: unused (drafts auto-load via chat)
+const loadCourseDraft = document.getElementById("load-course-draft"); // commented: unused
 const documentDraftSelect = document.getElementById("document-draft-select");
 const loadDocumentDraft = document.getElementById("load-document-draft");
 const reviewSummary = document.getElementById("review-summary");
@@ -594,13 +594,14 @@ async function refreshDraftSelectors() {
   ]);
   if (courseResponse.ok) {
     const body = await courseResponse.json();
-    courseDraftSelect.replaceChildren(...(body.drafts || []).filter((item) => item.status !== "applied").map((item) => option(String(item.id), courseDraftLabel(item))));
+    // courseDraftSelect is commented out in HTML; skip populating
+    // courseDraftSelect.replaceChildren(...(body.drafts || []).filter((item) => item.status !== "applied").map((item) => option(String(item.id), courseDraftLabel(item))));
   }
   if (documentResponse.ok) {
     const body = await documentResponse.json();
     documentDraftSelect.replaceChildren(...(body.document_drafts || []).filter((item) => item.status !== "applied").map((item) => option(String(item.id), documentDraftLabel(item))));
   }
-  if (activeDraftId) courseDraftSelect.value = activeDraftId;
+  // if (activeDraftId) courseDraftSelect.value = activeDraftId;
 }
 
 function filePreview(file) {
@@ -755,6 +756,12 @@ viewMode.addEventListener("change", async () => {
 });
 attach.addEventListener("click", () => files.click());
 files.addEventListener("change", () => queueFiles(files.files).catch(showError));
+message.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send.click();
+  }
+});
 saveVersion.addEventListener("click", () => saveCurrentVersion().catch((error) => {
   showError(error, "Version save failed.");
 }));
@@ -834,6 +841,19 @@ send.addEventListener("click", async () => {
         renderMessageContent(assistant.content, answer);
         chatLog.scrollTop = chatLog.scrollHeight;
       }
+      if (event === "tool_call") {
+        const toolMsg = `⚙ ${data.name}(${JSON.stringify(data.arguments)})`;
+        if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
+        const node = appendMessage({ role: "tool", content: toolMsg, created_at: new Date().toISOString() });
+        node.bubble.classList.add("tool-call");
+      }
+      if (event === "tool_result") {
+        const status = data.status === "ok" ? "✓" : "✗";
+        const toolMsg = `${status} ${data.name} completed`;
+        if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
+        const node = appendMessage({ role: "tool", content: toolMsg, created_at: new Date().toISOString() });
+        node.bubble.classList.add("tool-result");
+      }
       if (event === "draft" && data.draft) {
         if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
         if (!answer) renderMessageContent(assistant.content, "Draft ready for review.");
@@ -845,7 +865,16 @@ send.addEventListener("click", async () => {
         loadDocumentDraftById(data.document_draft.id).catch(showError);
       }
       if (event === "error") throw new Error(data.message || "Chat failed");
-      if (event === "done") { chatStatus.textContent = ""; setStatus("Response saved.", "ready"); }
+      if (event === "done") {
+        chatStatus.textContent = "";
+        if (data.summary) {
+          setStatus(data.summary, "ready");
+          if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
+          renderMessageContent(assistant.content, `✅ ${data.summary}`);
+        } else {
+          setStatus("Response saved.", "ready");
+        }
+      }
     });
   } catch (error) {
     const text = error instanceof Error ? error.message : "Chat failed";
@@ -895,8 +924,14 @@ applyDraft.addEventListener("click", async () => {
     if (!response.ok) {
       throw new Error(await errorMessage(response, "Apply failed"));
     }
-    await loadDocumentDraftById(activeDocumentDraftId);
-    setStatus("Document draft applied.", "ready");
+    const body = await response.json();
+    if (body.version) {
+      setStatus(`Document draft applied. Version saved: ${body.version.name}`, "ready");
+    } else {
+      setStatus("Document draft applied.", "ready");
+    }
+    await loadDocumentPreview();
+    setTab("chat");
     return;
   }
 
@@ -904,13 +939,20 @@ applyDraft.addEventListener("click", async () => {
   if (!response.ok) {
     throw new Error(await errorMessage(response, "Apply failed"));
   }
+  const body = await response.json();
+  if (body.version) {
+    setStatus(`Draft applied. Version saved: ${body.version.name}`, "ready");
+  } else {
+    setStatus("Draft applied.", "ready");
+  }
   await loadCourse(activeCourseId || course.value);
-  setStatus("Draft applied.", "ready");
+  setTab("chat");
 });
 
 loadDocumentDraft.addEventListener("click", () => loadDocumentDraftById(documentDraftSelect.value).catch(showError));
 
-loadCourseDraft.addEventListener("click", () => loadCourseDraftById(courseDraftSelect.value).catch(showError));
+// loadCourseDraft is commented out in HTML; skip event listener
+// loadCourseDraft.addEventListener("click", () => loadCourseDraftById(courseDraftSelect.value).catch(showError));
 
 save.addEventListener("click", async () => {
   if (versionMode) return;

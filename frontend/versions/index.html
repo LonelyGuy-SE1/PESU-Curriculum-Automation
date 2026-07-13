@@ -8,19 +8,20 @@
     <script src="versions.js" defer></script>
   </head>
   <body>
-    <div class="toolbar">
-      <select id="version" aria-label="Version"></select>
-      <button id="open-editor" type="button">Open in Editor</button>
-      <label class="diff-toggle" title="Show changes vs current">
-        <input id="diff-mode" type="checkbox" checked />
-        <span>Show Diff</span>
-      </label>
+    <header class="toolbar">
       <form class="snapshot" id="snapshot-form">
         <input id="version-name" name="name" type="text" placeholder="Snapshot label" required />
         <button class="primary" type="submit">Save Current Curriculum</button>
       </form>
       <span class="status-line" id="status" role="status"></span>
-    </div>
-    <iframe id="viewer" title="Version preview"></iframe>
+    </header>
+
+    <main class="workspace">
+      <aside class="sidebar" aria-label="Version history">
+        <h3 class="sidebar-header">Version History</h3>
+        <div id="version-list" class="version-list"></div>
+      </aside>
+      <iframe id="viewer" title="Version preview"></iframe>
+    </main>
   </body>
 </html>

@@ -117,8 +117,8 @@ def create_version_snapshot(name: str) -> dict:
     return version
 
 
-def selected_curriculum_year(value: str | None = None) -> str:
-    return str(value or "").strip() or DEFAULT_CURRICULUM_YEAR
+def selected_curriculum_year() -> str:
+    return DEFAULT_CURRICULUM_YEAR
 
 
 def refined_course(refined_id: int) -> dict:

@@ -162,10 +162,13 @@ def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_to
         messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": tool_calls})
         for tool_call in tool_calls:
             name = (tool_call.get("function") or {}).get("name") or ""
+            arguments = _tool_arguments(tool_call)
+            yield {"$event": "tool_call", "name": name, "arguments": arguments}
             try:
-                result = _run_tool(tool_runner, name, _tool_arguments(tool_call))
+                result = _run_tool(tool_runner, name, arguments)
             except ValueError as exc:
                 result = {"error": str(exc)}
+            yield {"$event": "tool_result", "name": name, "status": "ok" if "error" not in result else "error"}
             if on_tool_result:
                 on_tool_result(name, result)
             messages.append(

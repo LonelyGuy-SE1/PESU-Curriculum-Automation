@@ -153,6 +153,28 @@ button:disabled {
   color: #166534;
 }
 
+.message.tool {
+  background: #f8fafc;
+  border-left: 3px solid #64748b;
+  color: #475569;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.message.tool .message-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.message.tool.tool-call {
+  border-left-color: #3b82f6;
+}
+
+.message.tool.tool-result {
+  border-left-color: #22c55e;
+}
+
 .chat-status {
   padding: 4px 12px;
   font-size: 12px;
@@ -322,6 +344,30 @@ iframe {
   margin-left: auto;
   background: #eaf2ff;
   border-color: #b9d1f5;
+}
+
+.message.tool {
+  margin-left: auto;
+  margin-right: auto;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  max-width: 92%;
+  padding: 6px 10px;
+}
+
+.message.tool.tool-call {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #312e81;
+}
+
+.message.tool.tool-result {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
 }
 
 .message-time {

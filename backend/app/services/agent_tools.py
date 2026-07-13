@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from app.services.curriculum import draft_record, load_agent_draft, load_document_draft, ordered_courses, refined_course
+from app.services.curriculum import create_version_snapshot, draft_record, load_agent_draft, load_document_draft, ordered_courses, refined_course, selected_curriculum_year
 from app.services.diffing import diff_course
 from app.supabase import supabase
 
@@ -55,6 +55,86 @@ def _require_dict(arguments: dict, key: str) -> dict:
 
 def _get_current_course(arguments: dict) -> dict:
     return {"course": refined_course(_require_int(arguments, "refined_id"))}
+
+
+def _get_course_fields(arguments: dict) -> dict:
+    """Get specific field groups from a course. More efficient than full course JSON."""
+    refined_id = _require_int(arguments, "refined_id")
+    fields = arguments.get("fields")
+    if not isinstance(fields, list) or not fields:
+        raise ValueError("fields must be a non-empty array of field names")
+    
+    course = refined_course(refined_id)
+    result = {"refined_id": refined_id}
+    for field in fields:
+        if field in course:
+            result[field] = course[field]
+        else:
+            result[field] = None
+    return result
+
+
+def _get_course_codes(arguments: dict) -> dict:
+    """Get lightweight course identifiers: refined_id, course_code, course_title, semester."""
+    refined_id = _require_int(arguments, "refined_id")
+    course = refined_course(refined_id)
+    return {
+        "refined_id": refined_id,
+        "course_code": course.get("course_code"),
+        "course_title": course.get("course_title"),
+        "semester": course.get("semester"),
+        "program": course.get("program"),
+    }
+
+
+def _get_course_syllabus(arguments: dict) -> dict:
+    """Get syllabus content: units, objectives, course_outcomes."""
+    refined_id = _require_int(arguments, "refined_id")
+    course = refined_course(refined_id)
+    return {
+        "refined_id": refined_id,
+        "units": course.get("units"),
+        "objectives": course.get("objectives"),
+        "course_outcomes": course.get("course_outcomes"),
+    }
+
+
+def _get_course_textbooks(arguments: dict) -> dict:
+    """Get textbook fields: text_books, reference_books."""
+    refined_id = _require_int(arguments, "refined_id")
+    course = refined_course(refined_id)
+    return {
+        "refined_id": refined_id,
+        "text_books": course.get("text_books"),
+        "reference_books": course.get("reference_books"),
+    }
+
+
+def _get_course_deterministic(arguments: dict) -> dict:
+    """Get deterministic fields (program, hours, credits, course_type) — these are agent-protected."""
+    refined_id = _require_int(arguments, "refined_id")
+    course = refined_course(refined_id)
+    return {
+        "refined_id": refined_id,
+        "program": course.get("program"),
+        "lecture_hours": course.get("lecture_hours"),
+        "tutorial_hours": course.get("tutorial_hours"),
+        "practical_hours": course.get("practical_hours"),
+        "self_study": course.get("self_study"),
+        "credits": course.get("credits"),
+        "course_type": course.get("course_type"),
+    }
+
+
+def _get_course_lab(arguments: dict) -> dict:
+    """Get lab experiments and tools/languages."""
+    refined_id = _require_int(arguments, "refined_id")
+    course = refined_course(refined_id)
+    return {
+        "refined_id": refined_id,
+        "lab_experiments": course.get("lab_experiments"),
+        "tools_languages": course.get("tools_languages"),
+    }
 
 
 def _diff_course_json(arguments: dict) -> dict:
@@ -194,6 +274,21 @@ def _attachment_text(arguments: dict) -> dict:
     return {"attachments": rows}
 
 
+def _create_curriculum_version(arguments: dict) -> dict:
+    name = str(arguments.get("name") or "").strip()
+    if not name:
+        raise ValueError("name is required")
+    version = create_version_snapshot(name)
+    return {"version": version}
+
+
+def _signal_done(arguments: dict) -> dict:
+    summary = str(arguments.get("summary") or "").strip()
+    if not summary:
+        raise ValueError("summary is required")
+    return {"done": True, "summary": summary}
+
+
 OBJECT = {"type": "object", "additionalProperties": False}
 
 TOOLS: dict[str, AgentTool] = {
@@ -202,6 +297,49 @@ TOOLS: dict[str, AgentTool] = {
         "Read the current template-ready JSON for one refined course.",
         {**OBJECT, "properties": {"refined_id": {"type": "integer"}}, "required": ["refined_id"]},
         _get_current_course,
+    ),
+    "get_course_codes": AgentTool(
+        "get_course_codes",
+        "Read lightweight course identifiers (refined_id, course_code, course_title, semester, program). Use for listing or quick lookups.",
+        {**OBJECT, "properties": {"refined_id": {"type": "integer"}}, "required": ["refined_id"]},
+        _get_course_codes,
+    ),
+    "get_course_syllabus": AgentTool(
+        "get_course_syllabus",
+        "Read syllabus content: units, objectives, course_outcomes.",
+        {**OBJECT, "properties": {"refined_id": {"type": "integer"}}, "required": ["refined_id"]},
+        _get_course_syllabus,
+    ),
+    "get_course_textbooks": AgentTool(
+        "get_course_textbooks",
+        "Read textbook fields: text_books, reference_books.",
+        {**OBJECT, "properties": {"refined_id": {"type": "integer"}}, "required": ["refined_id"]},
+        _get_course_textbooks,
+    ),
+    "get_course_deterministic": AgentTool(
+        "get_course_deterministic",
+        "Read deterministic/protected fields: program, lecture_hours, tutorial_hours, practical_hours, self_study, credits, course_type. These cannot be changed by the agent.",
+        {**OBJECT, "properties": {"refined_id": {"type": "integer"}}, "required": ["refined_id"]},
+        _get_course_deterministic,
+    ),
+    "get_course_lab": AgentTool(
+        "get_course_lab",
+        "Read lab experiments and tools/languages.",
+        {**OBJECT, "properties": {"refined_id": {"type": "integer"}}, "required": ["refined_id"]},
+        _get_course_lab,
+    ),
+    "get_course_fields": AgentTool(
+        "get_course_fields",
+        "Read arbitrary specific fields from a course. Provide a list of field names. More efficient than fetching full JSON when you only need a subset.",
+        {
+            **OBJECT,
+            "properties": {
+                "refined_id": {"type": "integer"},
+                "fields": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            },
+            "required": ["refined_id", "fields"],
+        },
+        _get_course_fields,
     ),
     "diff_course_json": AgentTool(
         "diff_course_json",
@@ -315,5 +453,29 @@ TOOLS: dict[str, AgentTool] = {
             "required": ["session_id", "content"],
         },
         _create_report,
+    ),
+    "create_curriculum_version": AgentTool(
+        "create_curriculum_version",
+        "Create a named curriculum version snapshot (like a git commit). Use to checkpoint the curriculum state after a set of changes. Provide a descriptive name like 'feat: add CS201 lab experiments' or 'fix: correct credit hours for ECE301'.",
+        {
+            **OBJECT,
+            "properties": {
+                "name": {"type": "string", "description": "Descriptive version name (conventional commit style encouraged)"},
+            },
+            "required": ["name"],
+        },
+        _create_curriculum_version,
+    ),
+    "signal_done": AgentTool(
+        "signal_done",
+        "Signal that the agent has completed the user's request. Provide a concise summary of what was accomplished. This ends the agent's turn.",
+        {
+            **OBJECT,
+            "properties": {
+                "summary": {"type": "string", "description": "Brief summary of what was done, e.g. 'Created draft for CS201 adding Unit 5 on Graph Algorithms'"},
+            },
+            "required": ["summary"],
+        },
+        _signal_done,
     ),
 }

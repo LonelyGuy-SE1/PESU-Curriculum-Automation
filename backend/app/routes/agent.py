@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
@@ -20,6 +21,33 @@ def _diff_text_field(old: str, new: str) -> dict | None:
     if old == new:
         return None
     return {"kind": "text", "old": old or "", "new": new or ""}
+
+
+def _generate_version_name(summary: dict, prefix: str = "apply") -> str:
+    """Generate a conventional commit-style version name from diff summary."""
+    parts = []
+    change_pct = summary.get("change_percent") or 0
+    syllabus_pct = summary.get("syllabus_change_percent") or 0
+    topics_added = summary.get("topics_added") or []
+    topics_removed = summary.get("topics_removed") or []
+    protected = summary.get("protected_changes") or []
+
+    if protected:
+        parts.append("fix: protected fields modified")
+    elif syllabus_pct > 20:
+        parts.append(f"feat: major syllabus update ({syllabus_pct:.0f}% changed)")
+    elif syllabus_pct > 5:
+        parts.append(f"feat: syllabus changes ({syllabus_pct:.0f}% changed)")
+    elif change_pct > 10:
+        parts.append(f"chore: content updates ({change_pct:.0f}% changed)")
+    elif topics_added:
+        parts.append(f"feat: added {', '.join(topics_added[:2])}{'...' if len(topics_added) > 2 else ''}")
+    elif topics_removed:
+        parts.append(f"fix: removed {', '.join(topics_removed[:2])}{'...' if len(topics_removed) > 2 else ''}")
+    else:
+        parts.append(f"chore: minor updates ({change_pct:.0f}% changed)")
+
+    return f"{prefix}: {parts[0]}"
 
 
 def _diff_list_field(old: list, new: list) -> dict | None:
@@ -172,6 +200,27 @@ def preview_agent_draft(draft_id: int, diff: bool = False):
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
+def _generate_version_name(summary: dict, action: str) -> str:
+    """Generate a conventional-commit-style version name from diff summary."""
+    parts = []
+    if summary.get("syllabus_change_percent", 0) > 0:
+        parts.append(f"syllabus:{summary['syllabus_change_percent']}%")
+    if summary.get("topics_added"):
+        parts.append(f"+{len(summary['topics_added'])} topics")
+    if summary.get("topics_removed"):
+        parts.append(f"-{len(summary['topics_removed'])} topics")
+    if summary.get("protected_changes"):
+        parts.append("protected-fields")
+    if not parts:
+        parts.append("updates")
+    change_reason = summary.get("change_reason") or ""
+    prefix = action.capitalize()
+    if change_reason:
+        short = change_reason[:60].strip()
+        return f"{prefix}: {short} ({', '.join(parts)})"
+    return f"{prefix}: {', '.join(parts)}"
+
+
 @router.post("/agent/drafts/{draft_id}/apply")
 def apply_agent_draft(draft_id: int):
     try:
@@ -201,7 +250,8 @@ def apply_agent_draft(draft_id: int):
         ).execute()
         data = update_refined_fields(int(draft["refined_id"]), draft["proposed_json"])
         supabase.table("agent_drafts").update({"status": "applied"}).eq("id", draft_id).execute()
-        version = create_version_snapshot(f"Auto-save before draft #{draft_id} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        version_name = _generate_version_name(summary, "apply")
+        version = create_version_snapshot(version_name)
     except APIError as exc:
         raise database_http_exception(exc) from exc
     return {"message": "Draft applied", "data": data, "version": version}
@@ -310,7 +360,8 @@ def apply_agent_document_draft(document_draft_id: int):
             raise database_http_exception(exc) from exc
 
     supabase.table("agent_document_drafts").update({"status": "applied"}).eq("id", document_draft_id).execute()
-    version = create_version_snapshot(f"Auto-save before document draft #{document_draft_id} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    version_name = _generate_version_name(summary, "apply-multi")
+    version = create_version_snapshot(version_name)
 
     return {"message": f"Applied {len(applied)} drafts", "applied_draft_ids": applied, "version": version}
 
