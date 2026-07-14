@@ -24,27 +24,27 @@ def list_all_courses():
 
 
 @router.get("/preview/course/{refined_id}")
-def preview_course(refined_id: int):
+def preview_course(refined_id: int, curriculum_year: str | None = Query(None)):
     row = first_row(supabase.table("refined_submissions").select("*").eq("id", refined_id))
     if not row:
         raise HTTPException(status_code=404, detail="Refined submission not found")
     row = attach_submissions([row])[0]
     html = templates.get_template("jinja_sample.html").render(
         course=build_course_preview(row),
-        curriculum_year=selected_curriculum_year(),
+        curriculum_year=selected_curriculum_year(curriculum_year),
         asset_root="/",
     )
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/preview/html")
-def preview_all_html():
+def preview_all_html(curriculum_year: str | None = Query(None)):
     result = supabase.table("refined_submissions").select("*").neq("status", "archived").execute()
     courses = ordered_courses(result.data)
     html = templates.get_template("jinja_sample.html").render(
         courses=courses,
         semester="",
-        curriculum_year=selected_curriculum_year(),
+        curriculum_year=selected_curriculum_year(curriculum_year),
         asset_root="/",
         show_summaries=True,
     )
@@ -52,13 +52,13 @@ def preview_all_html():
 
 
 @router.get("/preview/pdf")
-def download_all_pdf(download: bool = Query(False)):
+def download_all_pdf(download: bool = Query(False), curriculum_year: str | None = Query(None)):
     result = supabase.table("refined_submissions").select("*").neq("status", "archived").execute()
     courses = ordered_courses(result.data)
     html = templates.get_template("jinja_sample.html").render(
         courses=courses,
         semester="",
-        curriculum_year=selected_curriculum_year(),
+        curriculum_year=selected_curriculum_year(curriculum_year),
         asset_root="",
         show_summaries=True,
     )
@@ -67,13 +67,13 @@ def download_all_pdf(download: bool = Query(False)):
 
 
 @router.get("/preview/semester/{sem}/pdf")
-def download_pdf(sem: int, download: bool = Query(False)):
+def download_pdf(sem: int, download: bool = Query(False), curriculum_year: str | None = Query(None)):
     result = supabase.table("refined_submissions").select("*").neq("status", "archived").eq("semester", sem).order("id").execute()
     courses = ordered_courses(result.data)
     html = templates.get_template("jinja_sample.html").render(
         courses=courses,
         semester=sem,
-        curriculum_year=selected_curriculum_year(),
+        curriculum_year=selected_curriculum_year(curriculum_year),
         asset_root="",
         show_summaries=True,
     )

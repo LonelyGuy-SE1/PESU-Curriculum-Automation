@@ -1,11 +1,80 @@
 from collections.abc import Callable
 from dataclasses import dataclass
+import base64
+import json
+import re
+from urllib.parse import quote_plus
 
 import httpx
+from weasyprint import HTML
 
 from app.services.curriculum import create_version_snapshot, draft_record, load_agent_draft, load_document_draft, ordered_courses, refined_course, selected_curriculum_year
 from app.services.diffing import diff_course
 from app.supabase import supabase
+
+
+def _markdown_to_html(md: str) -> str:
+    """Convert basic markdown to HTML for PDF generation."""
+    html = md
+    # Headers
+    html = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
+    html = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+    html = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
+    # Bold
+    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+    # Italic
+    html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
+    # Code inline
+    html = re.sub(r'`(.+?)`', r'<code>\1</code>', html)
+    # Code blocks
+    html = re.sub(r'```(\w+)?\n(.+?)```', r'<pre><code class="language-\1">\2</code></pre>', html, flags=re.DOTALL)
+    # Links
+    html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" target="_blank">\1</a>', html)
+    # Unordered lists
+    html = re.sub(r'^\- (.+)$', r'<li>\1</li>', html, flags=re.MULTILINE)
+    html = re.sub(r'(<li>.*?</li>\n)+', r'<ul>\n\g<0></ul>', html)
+    # Tables (basic)
+    # Split lines
+    lines = html.split('\n')
+    in_table = False
+    result = []
+    for line in lines:
+        if line.strip().startswith('|') and '|' in line[1:]:
+            if not in_table:
+                result.append('<table>')
+                in_table = True
+            cells = [c.strip() for c in line.strip('|').split('|')]
+            tag = 'th' if not in_table or not result[-1].startswith('<table>') else 'td'
+            if len(result) == 1 and result[-1] == '<table>':
+                tag = 'th'
+            result.append('<tr>' + ''.join(f'<{tag}>{c}</{tag}>' for c in cells) + '</tr>')
+        else:
+            if in_table:
+                result.append('</table>')
+                in_table = False
+            result.append(line)
+    if in_table:
+        result.append('</table>')
+    html = '\n'.join(result)
+    # Paragraphs
+    lines = html.split('\n')
+    result = []
+    in_p = False
+    for line in lines:
+        if line.strip() and not line.startswith('<') and not line.startswith('</'):
+            if not in_p:
+                result.append('<p>')
+                in_p = True
+            result.append(line)
+        else:
+            if in_p:
+                result.append('</p>')
+                in_p = False
+            result.append(line)
+    if in_p:
+        result.append('</p>')
+    return '\n'.join(result)
+
 
 ToolHandler = Callable[[dict], dict]
 
@@ -236,26 +305,113 @@ def _fetch_url(arguments: dict) -> dict:
     return {"url": url, "text": text, "chars": len(text)}
 
 
+def _web_search(arguments: dict) -> dict:
+    """Search the web using DuckDuckGo's HTML endpoint and return top results."""
+    query = str(arguments.get("query") or "").strip()
+    if not query:
+        raise ValueError("query is required")
+    num_results = int(arguments.get("num_results") or 5)
+    num_results = min(max(num_results, 1), 10)
+
+    url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+    resp = httpx.get(url, timeout=15, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+
+    # Parse results from DuckDuckGo HTML
+    html = resp.text
+    results = []
+    # Pattern for result snippets
+    result_pattern = re.compile(r'class="result__snippet">(.*?)</a>', re.DOTALL)
+    title_pattern = re.compile(r'class="result__title">.*?>(.*?)</a>', re.DOTALL)
+    url_pattern = re.compile(r'class="result__url">.*?>(.*?)</a>', re.DOTALL)
+
+    snippets = result_pattern.findall(html)
+    titles = title_pattern.findall(html)
+    urls = url_pattern.findall(html)
+
+    for i in range(min(num_results, len(snippets))):
+        title = re.sub(r"<[^>]+>", "", titles[i] if i < len(titles) else "").strip()
+        snippet = re.sub(r"<[^>]+>", "", snippets[i]).strip()
+        link = re.sub(r"<[^>]+>", "", urls[i] if i < len(urls) else "").strip()
+        if title or snippet:
+            results.append({"title": title, "snippet": snippet[:300], "url": link})
+
+    return {"query": query, "results": results}
+
+
 def _create_report(arguments: dict) -> dict:
     session_id = _require_int(arguments, "session_id")
     content = str(arguments.get("content") or "").strip()
     if not content:
         raise ValueError("content is required")
     filename = str(arguments.get("filename") or "report.md").strip()
+    fmt = str(arguments.get("format") or "markdown").strip().lower()
+    if fmt not in ("markdown", "pdf"):
+        raise ValueError("format must be 'markdown' or 'pdf'")
+    
+    if fmt == "pdf":
+        # Convert markdown to HTML then to PDF
+        import subprocess
+        import tempfile
+        import os
+        
+        # Simple markdown to HTML conversion
+        html_content = _markdown_to_html(content)
+        html_full = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }}
+        h1, h2, h3 {{ color: #00377b; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
+        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+        th {{ background: #f0f2f5; }}
+        code {{ background: #f3f4f6; padding: 2px 4px; border-radius: 3px; }}
+        pre {{ background: #f3f4f6; padding: 10px; overflow-x: auto; }}
+    </style>
+</head>
+<body>
+{html_content}
+</body>
+</html>"""
+        
+        # Use weasyprint to generate PDF
+        from weasyprint import HTML
+        pdf_bytes = HTML(string=html_full, base_url=".").write_pdf()
+        
+        if filename.endswith(".md"):
+            filename = filename[:-3] + ".pdf"
+        elif not filename.endswith(".pdf"):
+            filename = filename + ".pdf"
+        
+        content_type = "application/pdf"
+        size_bytes = len(pdf_bytes)
+        extracted_text = f"[PDF file - {size_bytes} bytes]"
+        content_base64 = base64.b64encode(pdf_bytes).decode()
+    else:
+        pdf_bytes = None
+        content_type = "text/markdown"
+        size_bytes = len(content.encode())
+        extracted_text = content
+        content_base64 = ""
+    
     row = (
         supabase.table("chat_attachments")
         .insert({
             "session_id": session_id,
             "filename": filename,
-            "content_type": "text/markdown",
-            "size_bytes": len(content.encode()),
-            "extracted_text": content,
+            "content_type": content_type,
+            "size_bytes": size_bytes,
+            "extracted_text": extracted_text,
+            "content_base64": content_base64,
             "status": "ready",
         })
         .execute()
         .data[0]
     )
-    return {"attachment": {"id": row["id"], "filename": row["filename"], "chars": len(content)}}
+
+    return {"attachment": {"id": row["id"], "filename": row["filename"], "chars": size_bytes, "format": fmt}}
 
 
 def _attachment_text(arguments: dict) -> dict:
@@ -440,15 +596,29 @@ TOOLS: dict[str, AgentTool] = {
         {**OBJECT, "properties": {"url": {"type": "string"}}, "required": ["url"]},
         _fetch_url,
     ),
+    "web_search": AgentTool(
+        "web_search",
+        "Search the web and return top results with titles, snippets, and URLs. Use for finding current information, documentation, or references.",
+        {
+            **OBJECT,
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "num_results": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5},
+            },
+            "required": ["query"],
+        },
+        _web_search,
+    ),
     "create_report": AgentTool(
         "create_report",
-        "Save a generated document (report, comparison, summary, etc.) as a chat attachment accessible to the user. Use after reading source documents and generating new content.",
+        "Save a generated document (report, comparison, summary, etc.) as a chat attachment accessible to the user. Use after reading source documents and generating new content. Supports markdown (.md) or PDF (.pdf) output.",
         {
             **OBJECT,
             "properties": {
                 "session_id": {"type": "integer"},
                 "content": {"type": "string", "description": "Full report/document content in markdown format"},
-                "filename": {"type": "string", "description": "Filename including extension, e.g. comparison-report.md"},
+                "filename": {"type": "string", "description": "Filename including extension, e.g. comparison-report.md or comparison-report.pdf"},
+                "format": {"type": "string", "enum": ["markdown", "pdf"], "default": "markdown", "description": "Output format: markdown or pdf"},
             },
             "required": ["session_id", "content"],
         },

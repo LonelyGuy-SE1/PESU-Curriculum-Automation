@@ -186,6 +186,28 @@ button:disabled {
   text-overflow: ellipsis;
   min-height: 0;
   line-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #00377b;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.spinner.active {
+  display: block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .workspace {
@@ -383,19 +405,66 @@ iframe {
   word-break: break-word;
 }
 
+.message-body h1, .message-body h2, .message-body h3, .message-body h4 {
+  margin: 8px 0 4px;
+  font-weight: 600;
+}
+.message-body h1 { font-size: 16px; }
+.message-body h2 { font-size: 14px; }
+.message-body h3 { font-size: 13px; }
+.message-body h4 { font-size: 12px; }
+
 .message-body hr {
   border: 0;
   border-top: 1px solid #d1d5db;
   margin: 8px 0;
 }
 
-.message-body ul {
+.message-body ul, .message-body ol {
   margin: 4px 0;
   padding-left: 20px;
 }
 
 .message-body li {
   list-style: disc;
+}
+
+.message-body ol li {
+  list-style: decimal;
+}
+
+.message-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 12px;
+}
+.message-body th, .message-body td {
+  border: 1px solid #d1d5db;
+  padding: 4px 8px;
+  text-align: left;
+}
+.message-body th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+.message-body pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.message-body pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
 }
 
 .message-body code {
@@ -407,9 +476,31 @@ iframe {
   font-size: 12px;
 }
 
+.message-body blockquote {
+  border-left: 3px solid #d1d5db;
+  margin: 8px 0;
+  padding: 4px 12px;
+  color: #4b5563;
+}
+
 .message-body a {
   color: #00377b;
   text-decoration: underline;
+}
+
+.message-body strong {
+  font-weight: 600;
+}
+
+.message-body p {
+  margin: 4px 0;
+}
+
+.message-body p:first-child {
+  margin-top: 0;
+}
+.message-body p:last-child {
+  margin-bottom: 0;
 }
 
 .attachments {
@@ -470,6 +561,26 @@ iframe {
 .attachment-remove {
   height: 26px;
   padding: 0 8px;
+}
+
+.attachment-download {
+  height: 26px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: #00377b;
+  background: #eaf2ff;
+  border: 1px solid #b3cde8;
+  border-radius: 4px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.attachment-download:hover {
+  background: #d4e4f7;
 }
 
 .composer {

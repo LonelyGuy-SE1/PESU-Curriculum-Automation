@@ -117,7 +117,9 @@ def create_version_snapshot(name: str) -> dict:
     return version
 
 
-def selected_curriculum_year() -> str:
+def selected_curriculum_year(override: str | None = None) -> str:
+    if override and override.strip():
+        return override.strip()
     return DEFAULT_CURRICULUM_YEAR
 
 

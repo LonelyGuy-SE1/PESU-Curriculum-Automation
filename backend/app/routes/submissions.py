@@ -2,7 +2,7 @@ import sentry_sdk
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from postgrest.exceptions import APIError
 
-from app.models.submission import CourseSubmission
+from app.models.submission import CourseSubmission, parse_course_code
 from app.services.errors import database_http_exception
 from app.services.refinement import refine
 from app.supabase import supabase
@@ -20,8 +20,15 @@ def refine_later(submission_id: int) -> None:
 
 @router.post("/submissions")
 def receive(data: CourseSubmission, background_tasks: BackgroundTasks):
+    parsed = parse_course_code(data.course_code)
     payload = data.model_dump()
-    payload["status"] = "pending"
+    payload.update({
+        "offering_department": parsed.offering_dept,
+        "target_department": parsed.target_dept,
+        "semester": int(parsed.semester),
+        "credit_category": parsed.credit_category,
+        "status": "pending",
+    })
     try:
         result = supabase.table("submissions").insert(payload).execute()
     except APIError as exc:

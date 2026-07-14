@@ -3,7 +3,7 @@ import logging
 
 import sentry_sdk
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from postgrest.exceptions import APIError
 
 from app.models.chat import ChatMessagePayload, ChatSessionPayload, ChatSessionTitlePayload
@@ -31,7 +31,46 @@ def load_chat_session(session_id: int) -> dict:
 
 def chat_messages(session_id: int) -> list[dict]:
     rows = supabase.table("chat_messages").select("*").eq("session_id", session_id).order("id").execute().data
-    return rows[-24:]
+    last24 = rows[-24:]
+
+    all_ids: list[int] = []
+    for row in last24:
+        for att in (row.get("metadata") or {}).get("attachments") or []:
+            if isinstance(att, dict) and att.get("id"):
+                all_ids.append(int(att["id"]))
+    if not all_ids:
+        return last24
+
+    att_rows = (
+        supabase.table("chat_attachments")
+        .select("id,filename,content_type,size_bytes,status,error")
+        .eq("session_id", session_id)
+        .in_("id", all_ids)
+        .execute()
+        .data
+    )
+    att_map = {str(a["id"]): a for a in att_rows}
+
+    for row in last24:
+        meta = row.get("metadata") or {}
+        enriched = []
+        for att in meta.get("attachments") or []:
+            if isinstance(att, dict) and att.get("id"):
+                full = att_map.get(str(att["id"]), {})
+                enriched.append({
+                    "id": att["id"],
+                    "name": full.get("filename") or "attachment",
+                    "type": full.get("content_type") or "",
+                    "size": full.get("size_bytes") or 0,
+                    "status": full.get("status") or "",
+                    "error": full.get("error") or "",
+                })
+            else:
+                enriched.append(att)
+        meta["attachments"] = enriched
+        row["metadata"] = meta
+
+    return last24
 
 
 def insert_chat_message(session_id: int, role: str, content: str, metadata: dict | None = None) -> dict:
@@ -90,13 +129,14 @@ def chat_system_prompt(session: dict) -> str:
         context = stable_context({"active_session_id": session_id})
     return f"""You are the PESU Curriculum Automation live editor assistant.
 Be concise, practical, and specific to the active curriculum data.
-Always respond by calling a tool — never state limitations or guess. The available tools handle course data, fetching URLs, generating reports, and creating drafts.
+Always respond by calling a tool — never state limitations or guess. The available tools handle course data, fetching URLs, searching the web, generating reports, and creating drafts.
 Read source documents with get_attachment_text, then call create_report to save generated content as a chat attachment.
 When the user asks to change the active course, call create_course_draft with the active_refined_id, only the fields that should change, and a short reason.
 When the user asks for changes across multiple courses or an uploaded document, inspect the curriculum or attachment text, then call create_document_draft with the affected courses.
 When the user asks what changed, call diff_course_json or read the relevant draft before answering.
 For broad document requests, use get_curriculum_json to inspect the whole syllabus before proposing edits.
 To fetch a public URL, call fetch_url and use the returned text.
+To search the web for current information, call web_search with a query.
 Never apply a draft, never claim a draft was applied, and never claim the refined database was changed.
 After creating a draft, tell the user to review the diff in the Review panel before applying it.
 After calling a tool, summarize the result for the user in natural language. Do not call another tool — stop and respond to the user.
@@ -112,7 +152,6 @@ Course data access — prefer granular tools over full JSON:
 - get_current_course_json: full course JSON — only use when you truly need everything
 
 When the user's request is fully addressed (draft created, question answered, report generated), call signal_done with a concise summary of what was accomplished.
-Use create_curriculum_version to checkpoint the curriculum state after a coherent set of changes (e.g., after applying drafts, or when user asks to save a version). Provide a descriptive name in conventional commit style (e.g., "feat: add Unit 5 to CS201", "fix: correct credits for ECE301").
 
 Active context:
 {context or "No active course or document draft is selected."}"""
@@ -216,23 +255,36 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
     def stream():
         answer = []
         tool_results = []
+        report_attachment_ids = []
 
         def remember_tool_result(name: str, result: dict) -> None:
             tool_results.append({"name": name, "result": result})
+            if name == "create_report":
+                attachment = (result or {}).get("attachment")
+                if attachment and attachment.get("id"):
+                    report_attachment_ids.append(attachment["id"])
 
         def flush_tool_results():
             while tool_results:
                 item = tool_results.pop(0)
                 draft = (item["result"] or {}).get("draft")
                 document_draft = (item["result"] or {}).get("document_draft")
-                done = (item["result"] or {}).get("done")
-                summary = (item["result"] or {}).get("summary")
                 if item["name"] == "create_course_draft" and draft:
                     yield sse("draft", {"draft": draft})
                 if item["name"] == "create_document_draft" and document_draft:
                     yield sse("document_draft", {"document_draft": document_draft})
-                if item["name"] == "signal_done" and done:
-                    yield sse("done", {"message": "Agent completed task", "summary": summary})
+
+        def save_assistant_message():
+            content = "".join(answer).strip()
+            if not content:
+                return None
+            metadata = {}
+            if report_attachment_ids:
+                metadata["attachments"] = [{"id": aid} for aid in report_attachment_ids]
+            message = insert_chat_message(session_id, "assistant", content, metadata)
+            if report_attachment_ids:
+                update_attachment_message(session_id, report_attachment_ids, message["id"])
+            return message
 
         try:
             yield sse("status", {"message": "Message saved"})
@@ -253,10 +305,11 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
                 answer.append(item)
                 yield sse("token", {"text": item})
             yield from flush_tool_results()
-            message = insert_chat_message(session_id, "assistant", "".join(answer).strip())
-            yield sse("done", {"message_id": message["id"]})
+            message = save_assistant_message()
+            yield sse("done", {"message_id": message["id"] if message else 0})
         except OpenRouterError as exc:
             yield from flush_tool_results()
+            save_assistant_message()
             logger.warning(
                 "Chat model request failed for session %s: status=%s detail=%s",
                 session_id,
@@ -269,6 +322,7 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
             yield sse("error", {"message": err})
         except Exception as exc:
             yield from flush_tool_results()
+            save_assistant_message()
             logger.exception("Chat stream failed for session %s", session_id)
             sentry_sdk.capture_exception(exc)
             yield sse("error", {"message": "An internal error occurred. Please try again later."})
@@ -283,6 +337,13 @@ async def upload_chat_attachments(session_id: int, files: list[UploadFile] = Fil
     for file in files:
         data = await file.read()
         text, status, error = extract_text(file.filename or "attachment", file.content_type or "", data)
+        
+        # Store binary content as base64 for non-text files
+        import base64
+        content_base64 = ""
+        if file.content_type and not file.content_type.startswith("text/") and file.content_type != "application/json":
+            content_base64 = base64.b64encode(data).decode()
+        
         row = (
             supabase.table("chat_attachments")
             .insert(
@@ -292,6 +353,7 @@ async def upload_chat_attachments(session_id: int, files: list[UploadFile] = Fil
                     "content_type": file.content_type or "",
                     "size_bytes": len(data),
                     "extracted_text": text,
+                    "content_base64": content_base64,
                     "status": status,
                     "error": error,
                 }
@@ -311,3 +373,25 @@ async def upload_chat_attachments(session_id: int, files: list[UploadFile] = Fil
             }
         )
     return {"attachments": attachments}
+
+
+@router.get("/chat/sessions/{session_id}/attachments/{attachment_id}/download")
+def download_chat_attachment(session_id: int, attachment_id: int):
+    load_chat_session(session_id)
+    row = supabase.table("chat_attachments").select("*").eq("id", attachment_id).eq("session_id", session_id).execute().data
+    if not row:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    row = row[0]
+    
+    import base64
+    content = row.get("content_base64")
+    if content:
+        data = base64.b64decode(content)
+    else:
+        data = (row.get("extracted_text") or "").encode()
+    
+    return Response(
+        content=data,
+        media_type=row.get("content_type") or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{row["filename"]}"', "Cache-Control": "no-store"},
+    )
