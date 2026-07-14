@@ -431,5 +431,5 @@ Either is fine; keep it isolated so it does not block the submission response.
 Templates live in `backend/app/templates/`. They receive context built in
 `services/preview.py` + the route. Prefer adding data to `build_course_preview` /
 `build_specialization_context` over hardcoding anything in HTML. The `do` extension
-is enabled, so mutable `{% set x = [] %}{% do x.append(...) %}` works. Always read
+is enabled, so mutable {% raw %}`{% set x = [] %}{% do x.append(...) %}`{% endraw %} works. Always read
 list context through `|default([])` so a missing key never crashes rendering.
