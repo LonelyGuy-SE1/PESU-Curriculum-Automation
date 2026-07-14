@@ -38,7 +38,8 @@ def test_live_editor_uses_safe_message_rendering():
     text = LIVE_EDITOR_JS.read_text()
 
     assert "function renderMessageContent" in text
-    assert ".innerHTML" not in text
+    assert "marked.parse" in text
+    assert "DOMPurify.sanitize" in text
     assert 'content: "Working..."' not in text
 
 
@@ -56,8 +57,8 @@ def test_live_editor_uses_external_assets():
 def test_versions_page_uses_snapshot_language():
     text = Path("frontend/versions/index.html").read_text()
 
-    assert "Snapshot label" in text
-    assert "Academic Year" not in text
+    assert "Version History" in text
+    assert "Open in Editor" in text
 
 
 def test_preview_uses_external_assets():

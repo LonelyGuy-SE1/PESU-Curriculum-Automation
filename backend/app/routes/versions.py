@@ -51,6 +51,25 @@ def list_versions():
     return {"versions": rows}
 
 
+@router.patch("/versions/{version_id}")
+def update_version(version_id: int, payload: dict):
+    _version(version_id)
+    updates = {}
+    if "name" in payload:
+        updates["name"] = str(payload["name"]).strip()
+    if "academic_year" in payload:
+        updates["academic_year"] = str(payload["academic_year"]).strip()
+    if "status" in payload:
+        updates["status"] = str(payload["status"]).strip()
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    try:
+        row = supabase.table("curriculum_versions").update(updates).eq("id", version_id).execute().data[0]
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
+    return {"version": row}
+
+
 @router.post("/versions")
 def create_version(payload: dict):
     name = str(payload.get("name") or "").strip()
@@ -162,18 +181,18 @@ def get_version_course(version_id: int, refined_id: int):
 
 
 @router.get("/versions/{version_id}/courses/{refined_id}/preview")
-def preview_version_course(version_id: int, refined_id: int):
+def preview_version_course(version_id: int, refined_id: int, curriculum_year: str | None = Query(None)):
     try:
         snapshot = _snapshot(version_id, refined_id)
     except APIError as exc:
         raise database_http_exception(exc) from exc
     version = _version(version_id)
-    html = templates.get_template("jinja_sample.html").render(course=snapshot["course_json"], curriculum_year=selected_curriculum_year(), asset_root="/")
+    html = templates.get_template("jinja_sample.html").render(course=snapshot["course_json"], curriculum_year=selected_curriculum_year(curriculum_year), asset_root="/")
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/versions/{version_id}/preview")
-def preview_version(version_id: int, diff: bool = Query(False)):
+def preview_version(version_id: int, diff: bool = Query(False), curriculum_year: str | None = Query(None)):
     try:
         version = _version(version_id)
         rows = (
@@ -196,7 +215,7 @@ def preview_version(version_id: int, diff: bool = Query(False)):
         html = templates.get_template("jinja_sample.html").render(
             courses=version_courses,
             semester="",
-            curriculum_year=selected_curriculum_year(),
+            curriculum_year=selected_curriculum_year(curriculum_year),
             asset_root="/",
             show_summaries=True,
         )
@@ -219,7 +238,7 @@ def preview_version(version_id: int, diff: bool = Query(False)):
 
     html = templates.get_template("jinja_diff.html").render(
         course_diffs=course_diffs,
-        curriculum_year=selected_curriculum_year(),
+        curriculum_year=selected_curriculum_year(curriculum_year),
         asset_root="/",
     )
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})

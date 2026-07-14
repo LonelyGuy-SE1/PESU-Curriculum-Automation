@@ -297,7 +297,7 @@ def test_preview_html_endpoint_returns_html(monkeypatch):
     monkeypatch.setattr(preview, "ordered_courses", mock_ordered_courses)
 
     # Call the endpoint function
-    resp = preview.preview_all_html()
+    resp = preview.preview_all_html(None)
 
     # Should return HTMLResponse
     from fastapi.responses import HTMLResponse

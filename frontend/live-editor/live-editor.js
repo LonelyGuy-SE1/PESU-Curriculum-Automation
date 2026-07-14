@@ -38,6 +38,7 @@ const reviewSummary = document.getElementById("review-summary");
 const diffView = document.getElementById("diff-view");
 const previewDraft = document.getElementById("preview-draft");
 const applyDraft = document.getElementById("apply-draft");
+const logoutBtn = document.getElementById("logout-btn");
 let activeCourseId = "";
 let activeDraftId = "";
 let activeDocumentDraftId = "";
@@ -45,6 +46,13 @@ let activeSessionId = "";
 let queuedFiles = [];
 let versionMode = false;
 const initialParams = new URLSearchParams(location.search);
+
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", () => {
+    localStorage.removeItem("sb-supgrlinqgxvifijgbns-auth-token");
+    location.href = "/auth/";
+  });
+}
 
 function setStatus(text, kind = "") {
   statusText.textContent = text || "";
@@ -313,6 +321,13 @@ function attachmentNode(file, index, removable) {
       renderDraftAttachments();
     });
     item.appendChild(remove);
+  } else if (file.id) {
+    const dl = document.createElement("a");
+    dl.className = "attachment-download";
+    dl.href = `/api/chat/sessions/${activeSessionId}/attachments/${file.id}/download`;
+    dl.download = file.name || "download";
+    dl.textContent = "Download";
+    item.appendChild(dl);
   } else {
     item.appendChild(document.createElement("span"));
   }
@@ -345,6 +360,10 @@ function messageNode(item) {
 }
 
 function renderInline(parent, text) {
+  if (typeof marked !== "undefined") {
+    parent.innerHTML = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(text)) : marked.parse(text);
+    return;
+  }
   const pattern = /(\*\*[^*]+\*\*|`[^`]+`|https?:\/\/[^\s<>"']+)/g;
   let last = 0;
   for (const match of text.matchAll(pattern)) {
@@ -377,6 +396,10 @@ function renderInline(parent, text) {
 function renderMessageContent(target, value) {
   target.replaceChildren();
   const text = String(value || "");
+  if (typeof marked !== "undefined") {
+    target.innerHTML = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(text)) : marked.parse(text);
+    return;
+  }
   const lines = text.split("\n");
   let inList = false;
   for (let i = 0; i < lines.length; i++) {
@@ -443,7 +466,13 @@ async function readEventStream(response, onEvent) {
     while (index >= 0) {
       const raw = buffer.slice(0, index).trim();
       buffer = buffer.slice(index + 2);
-      if (raw) onEvent(parseEvent(raw));
+      if (raw) {
+        try {
+          onEvent(parseEvent(raw));
+        } catch (e) {
+          console.warn("SSE parse error:", e);
+        }
+      }
       index = buffer.indexOf("\n\n");
     }
   }
@@ -705,6 +734,7 @@ async function loadDocumentPreview() {
   editor.value = "";
   resetReview();
   chatStatus.textContent = "";
+  loading.classList.add("active");
   viewer.src = "/api/preview/pdf";
   setStatus("Full Document");
   await ensureChatSession();
@@ -983,7 +1013,33 @@ const initialVersion = initialParams.get("version");
 const initialCourse = initialParams.get("course");
 const initialLoad = initialVersion && initialCourse ? loadVersionCourse(initialVersion, initialCourse) : loadDocumentPreview();
 
-Promise.all([refreshVersions(), initialLoad]).catch(() => {
+async function checkAuth() {
+  try {
+    const stored = localStorage.getItem('sb-supgrlinqgxvifijgbns-auth-token');
+    if (!stored) {
+      window.location.href = '/auth/';
+      return false;
+    }
+    const { access_token } = JSON.parse(stored);
+    if (!access_token) {
+      window.location.href = '/auth/';
+      return false;
+    }
+    const res = await fetch('/api/auth/check', {
+      headers: { 'Authorization': `Bearer ${access_token}` },
+    });
+    if (!res.ok) {
+      window.location.href = '/auth/';
+      return false;
+    }
+    return true;
+  } catch {
+    window.location.href = '/auth/';
+    return false;
+  }
+}
+
+Promise.all([checkAuth(), refreshVersions(), initialLoad]).catch(() => {
   loading.classList.remove("active");
   setStatus("Backend unavailable.", "error");
 });

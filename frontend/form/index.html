@@ -11,71 +11,28 @@
     <div class="container">
       <div class="card">
         <h1>Course Submission</h1>
-        <p class="subtitle">Fill in the course details below.</p>
+        <p class="subtitle">Fill in the course details below. Course code auto-fills semester, department, and credits.</p>
 
         <form id="course-form">
           <fieldset>
-            <legend>Faculty Details</legend>
+            <legend>Faculty</legend>
 
             <label for="faculty_email">Email</label>
-            <input type="email" id="faculty_email" name="faculty_email" required />
-
-            <label for="offering_department">Offering Department</label>
-
-            <select id="offering_department" name="offering_department" required>
-              <option value="">Select offering department</option>
-              <option value="MA">Mathematics (MA)</option>
-              <option value="CS">Computer Science (CS)</option>
-              <option value="UZ">(UZ)</option>
-            </select>
-
-            <span class="hint">e.g. Mathematics, Computer Science (MA, CS)</span>
+            <input type="email" id="faculty_email" name="faculty_email" required placeholder="admin@pesu.edu.in" />
           </fieldset>
 
           <fieldset>
-            <legend>Course Details</legend>
+            <legend>Course</legend>
 
-            <label for="target_department">Target Department / Program</label>
-            <select id="target_department" name="target_department" required>
-              <option value="">Select target department</option>
-              <option value="CSE">Computer Science and Engineering (CSE)</option>
-              <option value="AIML">Artificial Intelligence and Machine Learning (AIML)</option>
-              <option value="ECE">Electronics and Communication Engineering (ECE)</option>
-              <option value="ME">Mechanical Engineering (ME)</option>
-              <option value="EEE">Electronics and Electrical Engineering (EEE)</option>
-              <option value="BT">Biotechnology (BT)</option>
-            </select>
-
-            <label for="semester">Semester</label>
-            <select id="semester" name="semester" required>
-              <option value="">Select semester</option>
-              <option value="1">Semester 1</option>
-              <option value="2">Semester 2</option>
-              <option value="3">Semester 3</option>
-              <option value="4">Semester 4</option>
-              <option value="5">Semester 5</option>
-              <option value="6">Semester 6</option>
-              <option value="7">Semester 7</option>
-              <option value="8">Semester 8</option>
-            </select>
+            <label for="course_code">Course Code <span class="hint">(e.g. UE25CS242B)</span></label>
+            <input type="text" id="course_code" name="course_code" required placeholder="UE25CS242B" />
+            <div id="code-preview" class="code-preview hidden"></div>
 
             <label for="course_title">Course Title</label>
-            <input type="text" id="course_title" name="course_title" required />
+            <input type="text" id="course_title" name="course_title" required placeholder="Operating Systems" />
 
-            <label for="credit_category">Credit Category</label>
-            <select id="credit_category" name="credit_category" required>
-              <option value="">Select credit category</option>
-              <option value="0">0 Credits</option>
-              <option value="2">2 Credits</option>
-              <option value="4">4 Credits</option>
-              <option value="5">5 Credits</option>
-            </select>
-          </fieldset>
-
-          <fieldset>
-            <legend>Academic Content</legend>
             <label for="raw_course_content">Course Content</label>
-            <textarea id="raw_course_content" name="raw_course_content" rows="8" required></textarea>
+            <textarea id="raw_course_content" name="raw_course_content" rows="8" required placeholder="Unit 1: ...&#10;Unit 2: ..."></textarea>
             <span class="hint">Topics, units, or rough syllabus.</span>
 
             <label for="text_books">Textbook References</label>
@@ -96,5 +53,6 @@
         <div id="result" class="hidden"></div>
       </div>
     </div>
+    <script src="/shared/auth-guard.js"></script>
   </body>
 </html>

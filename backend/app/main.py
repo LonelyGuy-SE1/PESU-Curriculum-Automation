@@ -18,6 +18,7 @@ if sentry_dsn:
     sentry_sdk.init(**sentry_config)
 
 from app.api import router
+from app.routes.auth import router as auth_router
 
 
 def frontend_directory():
@@ -40,6 +41,7 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 
 frontend_dir = frontend_directory()
 if not frontend_dir:

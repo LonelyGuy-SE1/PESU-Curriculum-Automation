@@ -5,23 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Curriculum Versions</title>
     <link rel="stylesheet" href="versions.css" />
+    <script src="/shared/auth-guard.js"></script>
     <script src="versions.js" defer></script>
   </head>
   <body>
     <header class="toolbar">
-      <form class="snapshot" id="snapshot-form">
-        <input id="version-name" name="name" type="text" placeholder="Snapshot label" required />
-        <button class="primary" type="submit">Save Current Curriculum</button>
-      </form>
+      <span class="toolbar-title">Version History</span>
       <span class="status-line" id="status" role="status"></span>
     </header>
 
     <main class="workspace">
       <aside class="sidebar" aria-label="Version history">
-        <h3 class="sidebar-header">Version History</h3>
         <div id="version-list" class="version-list"></div>
       </aside>
-      <iframe id="viewer" title="Version preview"></iframe>
+      <section class="viewer-pane">
+        <div class="viewer-bar">
+          <a id="open-editor" class="button-link" href="/live-editor/" hidden>Open in Editor</a>
+        </div>
+        <iframe id="viewer" title="Version preview"></iframe>
+      </section>
     </main>
   </body>
 </html>
