@@ -38,6 +38,7 @@ const reviewSummary = document.getElementById("review-summary");
 const diffView = document.getElementById("diff-view");
 const previewDraft = document.getElementById("preview-draft");
 const applyDraft = document.getElementById("apply-draft");
+const togglePane = document.getElementById("toggle-pane");
 const logoutBtn = document.getElementById("logout-btn");
 let activeCourseId = "";
 let activeDraftId = "";
@@ -765,6 +766,14 @@ async function loadSemester(sem) {
 chatTab.addEventListener("click", () => setTab("chat"));
 fieldsTab.addEventListener("click", () => setTab("fields"));
 reviewTab.addEventListener("click", () => setTab("review"));
+if (togglePane) {
+  togglePane.addEventListener("click", () => {
+    const workspace = document.querySelector(".workspace");
+    const focused = workspace.classList.toggle("chat-focus");
+    togglePane.title = focused ? "Collapse chat / expand preview" : "Expand chat / collapse preview";
+    togglePane.classList.toggle("active", focused);
+  });
+}
 viewer.addEventListener("load", () => loading.classList.remove("active"));
 preview.addEventListener("click", () => {
   if (viewer.src && viewer.src !== "about:blank") viewer.src = viewer.src;

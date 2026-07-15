@@ -1,4 +1,5 @@
 const semester = document.getElementById("semester");
+const visibility = document.getElementById("visibility");
 const search = document.getElementById("search");
 const statusText = document.getElementById("status");
 const table = document.getElementById("course-table");
@@ -19,6 +20,8 @@ function cell(text) {
 function courseMatches(course) {
   const query = search.value.trim().toLowerCase();
   if (semester.value && String(course.semester) !== semester.value) return false;
+  if (visibility.value === "visible" && course.visible === false) return false;
+  if (visibility.value === "hidden" && course.visible !== false) return false;
   if (!query) return true;
   return `${course.course_code} ${course.course_title}`.toLowerCase().includes(query);
 }
@@ -26,7 +29,7 @@ function courseMatches(course) {
 function detailsRow(course) {
   const row = document.createElement("tr");
   const td = document.createElement("td");
-  td.colSpan = 5;
+  td.colSpan = 6;
   const details = document.createElement("div");
   details.className = "details";
   details.append(
@@ -54,7 +57,7 @@ function render() {
   if (!visible.length) {
     const row = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 5;
+    td.colSpan = 6;
     td.className = "empty";
     td.textContent = "No courses found.";
     row.appendChild(td);
@@ -65,8 +68,19 @@ function render() {
 
   visible.forEach((course) => {
     const row = document.createElement("tr");
-    row.className = "course-row";
+    row.className = course.visible === false ? "course-row hidden-row" : "course-row";
     row.append(cell(course.semester), cell(course.course_code), cell(course.course_title), cell(course.credits));
+
+    const visibleCell = document.createElement("td");
+    visibleCell.className = "center";
+    const toggle = document.createElement("input");
+    toggle.type = "checkbox";
+    toggle.checked = course.visible !== false;
+    toggle.title = "Include in rendered documents";
+    toggle.addEventListener("click", (event) => event.stopPropagation());
+    toggle.addEventListener("change", () => setVisibility(course, toggle));
+    visibleCell.appendChild(toggle);
+    row.appendChild(visibleCell);
 
     const action = document.createElement("td");
     const remove = document.createElement("button");
@@ -90,6 +104,23 @@ function render() {
   setStatus(`${visible.length} course${visible.length === 1 ? "" : "s"}.`, "ready");
 }
 
+async function setVisibility(course, toggle) {
+  const next = toggle.checked;
+  setStatus("Updating visibility...");
+  const response = await fetch(`/api/courses/${course.id}/visible`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ visible: next }),
+  });
+  if (!response.ok) {
+    toggle.checked = !next;
+    setStatus("Unable to update visibility.", "error");
+    return;
+  }
+  course.visible = next;
+  render();
+}
+
 async function deleteCourse(course) {
   if (!confirm(`Delete ${course.course_code || course.course_title}?`)) return;
   setStatus("Deleting course...");
@@ -110,6 +141,7 @@ async function loadCourses() {
 }
 
 semester.addEventListener("change", render);
+visibility.addEventListener("change", render);
 search.addEventListener("input", render);
 
 loadCourses().catch((error) => {

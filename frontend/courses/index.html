@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="../images/SE1128.png" />
     <title>Course Management</title>
     <link rel="stylesheet" href="courses.css" />
     <script src="courses.js" defer></script>
@@ -33,6 +34,11 @@
             <option value="7">Semester 7</option>
             <option value="8">Semester 8</option>
           </select>
+          <select id="visibility" aria-label="Visibility">
+            <option value="">All courses</option>
+            <option value="visible">Visible only</option>
+            <option value="hidden">Hidden only</option>
+          </select>
           <input id="search" type="search" aria-label="Search courses" />
           <span class="status-line" id="status"></span>
         </div>
@@ -45,6 +51,7 @@
                 <th>Code</th>
                 <th>Course</th>
                 <th>Credits</th>
+                <th>Visible</th>
                 <th></th>
               </tr>
             </thead>

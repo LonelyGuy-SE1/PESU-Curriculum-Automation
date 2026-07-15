@@ -438,6 +438,109 @@ def _create_curriculum_version(arguments: dict) -> dict:
     return {"version": version}
 
 
+def _define_specialization(arguments: dict) -> dict:
+    semester = _require_int(arguments, "semester")
+    name = str(arguments.get("name") or "").strip()
+    if not name:
+        raise ValueError("name is required")
+    letter = str(arguments.get("letter") or "").strip().upper()
+    if not letter:
+        existing = supabase.table("specialization_definitions").select("letter").eq("semester", semester).execute().data
+        used = {row["letter"] for row in existing}
+        for candidate in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            if candidate not in used:
+                letter = candidate
+                break
+        if not letter:
+            raise ValueError("No free specialization letter available for this semester")
+    academic_year = str(arguments.get("academic_year") or "").strip()
+    key = str(arguments.get("key") or "").strip().upper()
+    if not key:
+        key = name.split("(")[-1].rstrip(")") if "(" in name else name[:3].upper()
+    row = supabase.table("specialization_definitions").insert(
+        {"semester": semester, "letter": letter, "name": name, "key": key, "academic_year": academic_year}
+    ).execute().data[0]
+    return {"specialization": row}
+
+
+def _list_specializations(arguments: dict) -> dict:
+    query = supabase.table("specialization_definitions").select("*")
+    if arguments.get("semester") is not None:
+        query = query.eq("semester", int(arguments["semester"]))
+    return {"specializations": query.order("semester").order("letter").execute().data}
+
+
+def _assign_elective_to_tracks(arguments: dict) -> dict:
+    refined_id = _require_int(arguments, "refined_id")
+    spec_ids = arguments.get("specialization_ids")
+    if not isinstance(spec_ids, list) or not spec_ids:
+        raise ValueError("specialization_ids must be a non-empty array")
+    created = 0
+    for spec_id in spec_ids:
+        existing = (
+            supabase.table("course_specialization_assignments")
+            .select("id")
+            .eq("refined_id", refined_id)
+            .eq("specialization_id", int(spec_id))
+            .execute()
+            .data
+        )
+        if not existing:
+            supabase.table("course_specialization_assignments").insert(
+                {"refined_id": refined_id, "specialization_id": int(spec_id)}
+            ).execute()
+            created += 1
+    supabase.table("refined_submissions").update({"is_elective": True}).eq("id", refined_id).execute()
+    return {"assignments_created": created}
+
+
+def _remove_elective_from_tracks(arguments: dict) -> dict:
+    refined_id = _require_int(arguments, "refined_id")
+    spec_ids = arguments.get("specialization_ids")
+    if not isinstance(spec_ids, list) or not spec_ids:
+        raise ValueError("specialization_ids must be a non-empty array")
+    removed = 0
+    for spec_id in spec_ids:
+        result = (
+            supabase.table("course_specialization_assignments")
+            .delete()
+            .eq("refined_id", refined_id)
+            .eq("specialization_id", int(spec_id))
+            .execute()
+        )
+        removed += len(result.data or [])
+    return {"assignments_removed": removed}
+
+
+def _get_course_assignments(arguments: dict) -> dict:
+    refined_id = _require_int(arguments, "refined_id")
+    assignments = (
+        supabase.table("course_specialization_assignments")
+        .select("*, specialization_definitions(*)")
+        .eq("refined_id", refined_id)
+        .execute()
+        .data
+    )
+    return {"refined_id": refined_id, "assignments": assignments}
+
+
+def _update_deterministic_fields(arguments: dict) -> dict:
+    from app.services.diffing import PROTECTED_FIELDS
+
+    refined_id = _require_int(arguments, "refined_id")
+    fields = _require_dict(arguments, "fields")
+    protected = {key: value for key, value in fields.items() if key in PROTECTED_FIELDS}
+    if not protected:
+        raise ValueError("No deterministic fields provided. Use create_course_draft for other fields.")
+    record = draft_record(refined_id, protected, str(arguments.get("reason") or "Explicit user request to change deterministic fields"))
+    record["status"] = "blocked"
+    draft = supabase.table("agent_drafts").insert(record).execute().data[0]
+    return {
+        "draft": draft,
+        "warning": "This draft modifies deterministic fields (program, hours, credits, course_type). The user must explicitly approve it in the Review panel before it is applied.",
+    }
+
+
 def _signal_done(arguments: dict) -> dict:
     summary = str(arguments.get("summary") or "").strip()
     if not summary:
@@ -635,6 +738,81 @@ TOOLS: dict[str, AgentTool] = {
             "required": ["name"],
         },
         _create_curriculum_version,
+    ),
+    "define_specialization": AgentTool(
+        "define_specialization",
+        "Create a specialization track (e.g. Machine Intelligence and Data Science) for a given semester. The letter (A, B, C...) is auto-assigned if omitted. Used to set up the elective specialization brackets.",
+        {
+            **OBJECT,
+            "properties": {
+                "semester": {"type": "integer", "minimum": 1, "maximum": 8, "description": "Semester the specialization applies to (5 or 6 for electives)"},
+                "name": {"type": "string", "description": "Full specialization name, e.g. 'Machine Intelligence and Data Science (MIDS)'"},
+                "letter": {"type": "string", "description": "Optional letter label (A, B, C). Auto-assigned if omitted."},
+                "key": {"type": "string", "description": "Optional short key (SCC, MIDS, CSCS). Derived from name if omitted."},
+                "academic_year": {"type": "string", "description": "Optional academic year batch, e.g. 2025-26"},
+            },
+            "required": ["semester", "name"],
+        },
+        _define_specialization,
+    ),
+    "list_specializations": AgentTool(
+        "list_specializations",
+        "List specialization track definitions, optionally filtered by semester. Use to discover which tracks exist before assigning electives.",
+        {
+            **OBJECT,
+            "properties": {"semester": {"type": "integer", "minimum": 1, "maximum": 8}},
+        },
+        _list_specializations,
+    ),
+    "assign_elective_to_tracks": AgentTool(
+        "assign_elective_to_tracks",
+        "Categorize an elective course into one or more specialization tracks by their specialization_id. Also marks the course as an elective. Use after determining (e.g. via AI analysis) which tracks the course belongs to.",
+        {
+            **OBJECT,
+            "properties": {
+                "refined_id": {"type": "integer"},
+                "specialization_ids": {"type": "array", "items": {"type": "integer"}, "description": "Specialization track IDs to assign the elective to"},
+            },
+            "required": ["refined_id", "specialization_ids"],
+        },
+        _assign_elective_to_tracks,
+    ),
+    "remove_elective_from_tracks": AgentTool(
+        "remove_elective_from_tracks",
+        "Remove an elective course from one or more specialization tracks.",
+        {
+            **OBJECT,
+            "properties": {
+                "refined_id": {"type": "integer"},
+                "specialization_ids": {"type": "array", "items": {"type": "integer"}, "description": "Specialization track IDs to remove the elective from"},
+            },
+            "required": ["refined_id", "specialization_ids"],
+        },
+        _remove_elective_from_tracks,
+    ),
+    "get_course_assignments": AgentTool(
+        "get_course_assignments",
+        "Return which specialization tracks a course currently belongs to, including the track definitions.",
+        {
+            **OBJECT,
+            "properties": {"refined_id": {"type": "integer"}},
+            "required": ["refined_id"],
+        },
+        _get_course_assignments,
+    ),
+    "update_deterministic_fields": AgentTool(
+        "update_deterministic_fields",
+        "Create a reviewable draft that changes deterministic/protected fields (program, lecture_hours, tutorial_hours, practical_hours, self_study, credits, course_type). This is the ONLY way to modify those fields. The resulting draft is blocked until the user explicitly approves it in the Review panel. Always confirm with the user before calling this.",
+        {
+            **OBJECT,
+            "properties": {
+                "refined_id": {"type": "integer"},
+                "fields": {"type": "object", "description": "Protected fields to change, e.g. {\"credits\": 5, \"lecture_hours\": 4}"},
+                "reason": {"type": "string"},
+            },
+            "required": ["refined_id", "fields"],
+        },
+        _update_deterministic_fields,
     ),
     "signal_done": AgentTool(
         "signal_done",

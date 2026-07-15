@@ -1,22 +1,18 @@
-{% macro semester_name(value) -%}
-  {{ {"5": "V", "6": "VI"}.get(value|string, value) }}
-{%- endmacro %}
-
 {% macro course_row(course, number) -%}
   {% set code = course.course_code|string|upper|replace(" ", "") %}
   {% set title = course.course_title|string|lower %}
   {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
   {% set is_no_course = "no course offered" in title %}
-  {% set is_elective = ("AA" in code or "AB" in code or "BA" in code or "BB" in code) and not is_placeholder and not is_no_course %}
+  {% set is_elective = course.is_elective %}
   <tr>
     <td class="center">{{ number }}</td>
     <td>{{ course.course_code | course_code_for_year(course.semester, curriculum_year) }}</td>
     <td>{{ course.course_title }}</td>
-    <td class="center">{% if is_no_course %}{% elif is_elective %}4{% else %}{{ course.lecture_hours }}{% endif %}</td>
-    <td class="center">{% if is_no_course %}{% elif is_elective %}0{% else %}{{ course.tutorial_hours }}{% endif %}</td>
-    <td class="center">{% if is_no_course %}{% elif is_elective %}0{% else %}{{ course.practical_hours }}{% endif %}</td>
-    <td class="center">{% if is_no_course %}{% elif is_elective %}4{% else %}{{ course.self_study }}{% endif %}</td>
-    <td class="center">{% if is_no_course %}{% elif is_elective %}4{% else %}{{ course.credits }}{% endif %}</td>
+    <td class="center">{% if is_no_course %}{% elif is_placeholder %}{% else %}{{ course.lecture_hours }}{% endif %}</td>
+    <td class="center">{% if is_no_course %}{% elif is_placeholder %}{% else %}{{ course.tutorial_hours }}{% endif %}</td>
+    <td class="center">{% if is_no_course %}{% elif is_placeholder %}{% else %}{{ course.practical_hours }}{% endif %}</td>
+    <td class="center">{% if is_no_course %}{% elif is_placeholder %}{% else %}{{ course.self_study }}{% endif %}</td>
+    <td class="center">{% if is_no_course %}{% elif is_placeholder %}{% else %}{{ course.credits }}{% endif %}</td>
     <td>{{ course.tools_languages }}</td>
     <td>{% if is_no_course %}{% elif is_elective or is_placeholder %}Elective Course{% else %}{{ course.course_type }}{% endif %}</td>
   </tr>
@@ -26,10 +22,39 @@
   {% if total != credit_total %}{{ credit_total }}/{{ total }}{% else %}{{ total }}{% endif %}
 {%- endmacro %}
 
-{% macro specialization_codes(codes, summary_semester, curriculum_year) -%}
-  {% for code in codes %}
-    <p>{{ ("UE00CS" ~ code) | course_code_for_year(summary_semester, curriculum_year) }}</p>
+{% macro spec_codes_for(spec, summary_semester) -%}
+  {% set first = [] %}
+  {% set second = [] %}
+  {% for assign in specialization_assignments|default([]) %}
+    {% if assign.specialization_id == spec.id %}
+      {% for c in course_list %}
+        {% set code = c.course_code|string|upper|replace(" ", "") %}
+        {% set title = c.course_title|string|lower %}
+        {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
+        {% set is_no_course = "no course offered" in title %}
+        {% if c.refined_id|string == assign.refined_id|string
+              and c.semester|string == summary_semester|string
+              and c.is_elective
+              and not is_placeholder
+              and not is_no_course %}
+          {% set adjusted = c.course_code | course_code_for_year(c.semester, curriculum_year) %}
+          {% if (summary_semester == 5 and "AA" in code) or (summary_semester == 6 and "BA" in code) %}
+            {% do first.append(adjusted) %}
+          {% elif (summary_semester == 5 and "AB" in code) or (summary_semester == 6 and "BB" in code) %}
+            {% do second.append(adjusted) %}
+          {% else %}
+            {% do first.append(adjusted) %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
   {% endfor %}
+  <tr>
+    <td class="center">{{ spec.letter }}</td>
+    <td>{{ spec.name }}</td>
+    <td>{% for code in first %}<p>{{ code }}</p>{% endfor %}</td>
+    <td>{% for code in second %}<p>{{ code }}</p>{% endfor %}</td>
+  </tr>
 {%- endmacro %}
 
 {% set requested_semester = semester|string if semester is defined and semester else "" %}
@@ -39,11 +64,9 @@
     {% for summary_course in course_list %}
       {% set code = summary_course.course_code|string|upper|replace(" ", "") %}
       {% set title = summary_course.course_title|string|lower %}
-      {% set course_type = summary_course.course_type|string|lower %}
       {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
-      {% set has_elective_code = "AA" in code or "AB" in code or "BA" in code or "BB" in code %}
-      {% set is_actual_elective = has_elective_code and not is_placeholder %}
-      {% if summary_course.semester|string == summary_semester|string and not is_actual_elective %}
+      {% set is_no_course = "no course offered" in title %}
+      {% if summary_course.semester|string == summary_semester|string and not summary_course.is_elective and not is_placeholder and not is_no_course %}
         {% set credit_value = summary_course.credits|int %}
         {% set totals.count = totals.count + 1 %}
         {% set totals.lecture = totals.lecture + summary_course.lecture_hours|int %}
@@ -56,23 +79,24 @@
         {% endif %}
       {% endif %}
     {% endfor %}
+    {% set placeholder_names = ["Elective I", "Elective II"] if summary_semester == 5 else ["Elective III", "Elective IV"] %}
+    {% set has_real_courses = totals.count > 0 %}
+    {% if has_real_courses %}
+      {% set totals.count = totals.count + placeholder_names|length %}
+      {% set totals.credits = totals.credits + placeholder_names|length * 4 %}
+    {% endif %}
 
     {% set elective_a = namespace(count=0) %}
     {% set elective_b = namespace(count=0) %}
     {% for summary_course in course_list %}
       {% set code = summary_course.course_code|string|upper|replace(" ", "") %}
       {% set title = summary_course.course_title|string|lower %}
-      {% set course_type = summary_course.course_type|string|lower %}
       {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
-      {% set is_elective = not is_placeholder %}
-      {% if summary_course.semester|string == summary_semester|string and is_elective %}
-        {% if summary_semester == 5 and "AA" in code %}
+      {% set is_no_course = "no course offered" in title %}
+      {% if summary_course.semester|string == summary_semester|string and summary_course.is_elective and not is_placeholder and not is_no_course %}
+        {% if (summary_semester == 5 and "AA" in code) or (summary_semester == 6 and "BA" in code) %}
           {% set elective_a.count = elective_a.count + 1 %}
-        {% elif summary_semester == 5 and "AB" in code %}
-          {% set elective_b.count = elective_b.count + 1 %}
-        {% elif summary_semester == 6 and "BA" in code %}
-          {% set elective_a.count = elective_a.count + 1 %}
-        {% elif summary_semester == 6 and "BB" in code %}
+        {% elif (summary_semester == 5 and "AB" in code) or (summary_semester == 6 and "BB" in code) %}
           {% set elective_b.count = elective_b.count + 1 %}
         {% endif %}
       {% endif %}
@@ -84,7 +108,7 @@
           <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
           <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />
         </header>
-        <h2 class="semester-title">{{ semester_name(summary_semester) }} SEMESTER {{ batch_label(summary_semester, curriculum_year) }}</h2>
+        <h2 class="semester-title">{{ SEMESTER_NAMES[summary_semester|string] }} SEMESTER {{ batch_label(summary_semester, curriculum_year) }}</h2>
 
         {% if totals.count %}
           <table class="meta summary-table">
@@ -121,15 +145,30 @@
               {% for summary_course in course_list %}
                 {% set code = summary_course.course_code|string|upper|replace(" ", "") %}
                 {% set title = summary_course.course_title|string|lower %}
-                {% set course_type = summary_course.course_type|string|lower %}
                 {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
-                {% set has_elective_code = "AA" in code or "AB" in code or "BA" in code or "BB" in code %}
-                {% set is_actual_elective = has_elective_code and not is_placeholder %}
-                {% if summary_course.semester|string == summary_semester|string and not is_actual_elective %}
+                {% set is_no_course = "no course offered" in title %}
+                {% if summary_course.semester|string == summary_semester|string and not summary_course.is_elective and not is_placeholder and not is_no_course %}
                   {{ course_row(summary_course, row.number) }}
                   {% set row.number = row.number + 1 %}
                 {% endif %}
               {% endfor %}
+              {% if has_real_courses %}
+              {% for pname in placeholder_names %}
+                <tr>
+                  <td class="center">{{ row.number }}</td>
+                  <td></td>
+                  <td>{{ pname }}</td>
+                  <td class="center"></td>
+                  <td class="center"></td>
+                  <td class="center"></td>
+                  <td class="center"></td>
+                  <td class="center">4</td>
+                  <td></td>
+                  <td>Elective Course</td>
+                </tr>
+                {% set row.number = row.number + 1 %}
+              {% endfor %}
+              {% endif %}
               <tr>
                 <th colspan="3" class="center">Total</th>
                 <td class="center">{{ total_cell(totals.lecture, totals.lecture_credit) }}</td>
@@ -145,6 +184,8 @@
         {% endif %}
 
         {% for group in ["a", "b"] %}
+          {% set group_count = elective_a.count if group == "a" else elective_b.count %}
+          {% if group_count %}
             <table class="meta summary-table">
               <colgroup>
                 <col class="summary-number" />
@@ -172,38 +213,27 @@
                 {% for summary_course in course_list %}
                   {% set code = summary_course.course_code|string|upper|replace(" ", "") %}
                   {% set title = summary_course.course_title|string|lower %}
-                  {% set course_type = summary_course.course_type|string|lower %}
                   {% set is_placeholder = code.endswith("X") or title in ["elective i", "elective ii", "elective iii", "elective iv"] %}
-                  {% set is_elective = not is_placeholder %}
+                  {% set is_no_course = "no course offered" in title %}
                   {% set is_group_a = (summary_semester == 5 and "AA" in code) or (summary_semester == 6 and "BA" in code) %}
                   {% set is_group_b = (summary_semester == 5 and "AB" in code) or (summary_semester == 6 and "BB" in code) %}
-                  {% if summary_course.semester|string == summary_semester|string and is_elective and ((group == "a" and is_group_a) or (group == "b" and is_group_b)) %}
+                  {% if summary_course.semester|string == summary_semester|string and summary_course.is_elective and not is_placeholder and not is_no_course and ((group == "a" and is_group_a) or (group == "b" and is_group_b)) %}
                     {{ course_row(summary_course, row.number) }}
                     {% set row.number = row.number + 1 %}
                   {% endif %}
                 {% endfor %}
               </tbody>
             </table>
+          {% endif %}
         {% endfor %}
 
-        {% if summary_semester in [5, 6] %}
-          {% if summary_semester == 5 %}
-            {% set first_label = "Elective-I" %}
-            {% set second_label = "Elective-II" %}
-            {% set specializations = [
-              {"letter": "A", "name": "System and Core Computing (SCC)", "first": ["342AA1", "342AA8", "342AA9"], "second": ["343AB1", "343AB2", "343AB3", "343AB4", "343AB8"]},
-              {"letter": "B", "name": "Machine Intelligence and Data Science (MIDS)", "first": ["342AA2", "342AA5", "342AA6", "342AA8"], "second": ["343AB1", "342AB2", "342AB7"]},
-              {"letter": "C", "name": "Cyber Security and Connected Systems (CSCS)", "first": ["342AA3", "342AA4", "342AA5", "342AA7"], "second": ["343AB5", "342AB6", "342AB7"]},
-            ] %}
-          {% else %}
-            {% set first_label = "Elective-III" %}
-            {% set second_label = "Elective-IV" %}
-            {% set specializations = [
-              {"letter": "A", "name": "System and Core Computing (SCC)", "first": ["342BA1", "342BA2", "342BA3"], "second": ["343BB1", "343BB3", "343BB5", "343BB10"]},
-              {"letter": "B", "name": "Machine Intelligence and Data Science (MIDS)", "first": ["342BA2", "342BA3", "342BA4", "342BA7", "342BA10"], "second": ["343BB2", "343BB4", "343BB7", "343BB9", "343BB10"]},
-              {"letter": "C", "name": "Cyber Security and Connected Systems (CSCS)", "first": ["342BA5", "342BA6", "342BA7", "342BA8"], "second": ["343BB6", "343BB7", "343BB8", "343BB9", "343BB11", "343BB12"]},
-            ] %}
+        {% set semester_specs = [] %}
+        {% for spec in specializations|default([]) %}
+          {% if spec.semester|string == summary_semester|string %}
+            {% do semester_specs.append(spec) %}
           {% endif %}
+        {% endfor %}
+        {% if semester_specs %}
           <table class="meta summary-table specialization-table">
             <colgroup>
               <col class="summary-number" />
@@ -218,16 +248,11 @@
               <tr>
                 <th class="center">Sl. No.</th>
                 <th>Specialization</th>
-                <th>{{ first_label }}</th>
-                <th>{{ second_label }}</th>
+                <th>{{ "Elective-I" if summary_semester == 5 else "Elective-III" }}</th>
+                <th>{{ "Elective-II" if summary_semester == 5 else "Elective-IV" }}</th>
               </tr>
-              {% for specialization in specializations %}
-                <tr>
-                  <td class="center">{{ specialization.letter }}</td>
-                  <td>{{ specialization.name }}</td>
-                  <td>{{ specialization_codes(specialization.first, summary_semester, curriculum_year) }}</td>
-                  <td>{{ specialization_codes(specialization.second, summary_semester, curriculum_year) }}</td>
-                </tr>
+              {% for spec in semester_specs %}
+                {{ spec_codes_for(spec, summary_semester) }}
               {% endfor %}
             </tbody>
           </table>

@@ -34,6 +34,7 @@ create table if not exists refined_submissions (
   credits int not null default 0,
   course_type text not null default '',
   is_elective boolean not null default false,
+  visible boolean not null default true,
   units jsonb not null default '[]'::jsonb,
   objectives text not null default '',
   course_outcomes text not null default '',

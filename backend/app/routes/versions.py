@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from postgrest.exceptions import APIError
 
-from app.preview import build_course_preview
+from app.preview import build_course_preview, build_specialization_context
 from app.rendering import templates
 from app.services.curriculum import attach_submissions, DEFAULT_CURRICULUM_YEAR, selected_curriculum_year, update_refined_fields
 from app.services.diffing import diff_course
@@ -218,6 +218,7 @@ def preview_version(version_id: int, diff: bool = Query(False), curriculum_year:
             curriculum_year=selected_curriculum_year(curriculum_year),
             asset_root="/",
             show_summaries=True,
+            **build_specialization_context(selected_curriculum_year(curriculum_year)),
         )
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
@@ -233,8 +234,9 @@ def preview_version(version_id: int, diff: bool = Query(False), curriculum_year:
         if current_course:
             base = dict(current_course)
             proposed = dict(v_course)
-            course_diff = _build_course_diff(base, proposed)
-            course_diffs.append({"base": base, "proposed": proposed, "course_diff": course_diff})
+            course_diff = _build_course_diff(proposed, base)
+            if any(v is not None for v in course_diff.values()):
+                course_diffs.append({"base": base, "proposed": proposed, "course_diff": course_diff})
 
     html = templates.get_template("jinja_diff.html").render(
         course_diffs=course_diffs,

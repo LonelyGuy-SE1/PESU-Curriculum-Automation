@@ -166,7 +166,7 @@ async function loadVersions() {
 function loadVersion(versionId) {
   activeVersionId = String(versionId);
   versionList.querySelectorAll(".tree-item").forEach((el) => el.classList.toggle("active", el.dataset.versionId === String(versionId)));
-  viewer.src = `/api/versions/${versionId}/preview?diff=1`;
+  viewer.src = `/api/versions/${versionId}/preview?diff=1&_t=${Date.now()}`;
   openEditor.href = `/live-editor/?version=${versionId}`;
   openEditor.hidden = false;
   setStatus(`Viewing diff for snapshot ${versionId}`);

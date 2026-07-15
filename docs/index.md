@@ -163,6 +163,12 @@ The templates compose like this:
 WeasyPrint turns the rendered HTML into PDF for the `/preview/pdf` and
 `/preview/semester/{sem}/pdf` endpoints.
 
+Course ordering within a semester is set by `course_sort_key` in
+`services/curriculum.py`: courses sort by credits descending (5 before 4 before 2
+before 0), then by the explicit `SOURCE_ORDER` position (or the `elective_order`
+suffix rule for semesters 5/6), then by database id. Courses with `visible = false`
+are excluded from all rendered output.
+
 ### 4. Specialization System (dynamic)
 
 Specialization brackets and elective membership are fully data-driven.
@@ -323,8 +329,12 @@ Run `docs/schema.sql` in the Supabase SQL editor. Required tables:
 
 Key columns on `refined_submissions`: `course_code, course_title, semester,
 credit_category, program, lecture_hours, tutorial_hours, practical_hours, self_study,
-credits, course_type, is_elective, units (jsonb), objectives/text_books/… (arrays),
-status`.
+credits, course_type, is_elective, visible, units (jsonb), objectives/text_books/…
+(arrays), status`.
+
+`visible` (default `true`) controls whether a course renders in preview/PDF output.
+Toggle it from the course management page. Hidden courses stay in the database and
+remain editable but are excluded from every rendered document.
 
 Verify with `GET /api/health/schema`.
 

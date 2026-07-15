@@ -82,7 +82,17 @@ def ordered_courses(rows: list[dict]) -> list[dict]:
     return [build_course_preview(row) for row in rows]
 
 
-def course_sort_key(row: dict) -> tuple[int, int, int]:
+def course_credits(row: dict) -> int:
+    value = row.get("credits")
+    if value not in (None, ""):
+        return int(value)
+    category = str((row.get("_submission") or {}).get("credit_category") or "").strip()
+    if category.isdigit():
+        return int(category)
+    return 0
+
+
+def course_sort_key(row: dict) -> tuple[int, int, int, int]:
     semester = int(row.get("semester") or 0)
     code = str(row.get("course_code") or "").replace(" ", "").upper()
     order = SOURCE_ORDER.get(code)
@@ -90,7 +100,7 @@ def course_sort_key(row: dict) -> tuple[int, int, int]:
         order = elective_order(code, "AA", "AB")
     if order is None and semester == 6:
         order = elective_order(code, "BA", "BB")
-    return semester, order or 900, int(row.get("id") or 0)
+    return semester, -course_credits(row), order or 900, int(row.get("id") or 0)
 
 
 def elective_order(code: str, first_group: str, second_group: str) -> int | None:
