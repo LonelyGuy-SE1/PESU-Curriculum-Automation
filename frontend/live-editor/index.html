@@ -95,7 +95,7 @@
             <textarea id="message" aria-label="Message"></textarea>
             <div class="composer-actions">
               <button id="attach" type="button">Attach</button>
-              <input id="files" type="file" multiple accept="image/*,.pdf,.txt,.doc,.docx" hidden />
+              <input id="files" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.png,.jpg,.jpeg" hidden />
               <button class="primary" id="send" type="button">Send</button>
             </div>
           </div>
@@ -129,6 +129,16 @@
         </section>
       </aside>
     </main>
+
+    <div class="preview-overlay" id="preview-overlay" hidden>
+      <div class="preview-modal">
+        <div class="preview-header">
+          <span class="preview-filename" id="preview-filename"></span>
+          <button class="preview-close" id="preview-close" type="button">&times;</button>
+        </div>
+        <div class="preview-body" id="preview-body"></div>
+      </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>

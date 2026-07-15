@@ -61,7 +61,7 @@ flowchart LR
 - **Course submission** with auto-parsed course codes (semester, department, credits extracted automatically)
 - **AI refinement** that preserves all syllabus topics, only cleans and structures content
 - **Full curriculum PDFs** in PES University's official A4 format with letterhead
-- **Live editor** with AI assistant (SSE streaming, 27 tools, draft review)
+- **Live editor** with AI assistant (SSE streaming, 32 tools, draft review)
 - **Reviewable drafts** (agent never auto-applies changes)
 - **Dynamic specialization management** (DB-driven tracks, not hardcoded)
 - **Version snapshots** with restore and revision history

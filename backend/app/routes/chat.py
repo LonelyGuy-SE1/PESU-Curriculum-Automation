@@ -38,6 +38,34 @@ def chat_messages(session_id: int) -> list[dict]:
         for att in (row.get("metadata") or {}).get("attachments") or []:
             if isinstance(att, dict) and att.get("id"):
                 all_ids.append(int(att["id"]))
+
+    known_ids = set(all_ids)
+
+    orphan_rows = (
+        supabase.table("chat_attachments")
+        .select("id,filename,content_type,size_bytes,status,error")
+        .eq("session_id", session_id)
+        .is_("message_id", "null")
+        .execute().data
+    )
+    orphans = [r for r in orphan_rows if r["id"] not in known_ids]
+
+    if orphans:
+        last_assistant = None
+        for row in reversed(last24):
+            if row.get("role") == "assistant":
+                last_assistant = row
+                break
+        if last_assistant:
+            meta = last_assistant.get("metadata") or {}
+            existing = meta.get("attachments") or []
+            for o in orphans:
+                existing.append({"id": o["id"]})
+                all_ids.append(o["id"])
+                known_ids.add(o["id"])
+            meta["attachments"] = existing
+            last_assistant["metadata"] = meta
+
     if not all_ids:
         return last24
 
@@ -114,7 +142,7 @@ def attachment_context(session_id: int, metadata: dict | None) -> str:
 
 
 def stable_context(value: dict) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2)[:12000]
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2)[:16000]
 
 
 def chat_system_prompt(session: dict) -> str:
@@ -129,30 +157,38 @@ def chat_system_prompt(session: dict) -> str:
         context = stable_context({"active_session_id": session_id})
     return f"""You are the PESU Curriculum Automation live editor assistant.
 Be concise, practical, and specific to the active curriculum data.
-Always respond by calling a tool — never state limitations or guess. The available tools handle course data, fetching URLs, searching the web, generating reports, and creating drafts.
+Keep conversations professional and friendly. Do not use em dashes in any output. Use standard hyphens or commas instead.
+Always respond by calling a tool -- never state limitations or guess. The available tools handle course data, fetching URLs, searching the web, generating spreadsheets, generating reports, and creating drafts.
+
+Chaining tools: When a user request clearly requires multiple steps (e.g. "export semester 3 to CSV" needs list_courses then batch_read_courses then create_spreadsheet), chain the tools in a single turn. Do not stop after one tool if the task is not yet complete. Stop chaining and respond only when the task is done or you need user input.
+
 Read source documents with get_attachment_text, then call create_report to save generated content as a chat attachment.
 When the user asks to change the active course, call create_course_draft with the active_refined_id, only the fields that should change, and a short reason.
 When the user asks for changes across multiple courses or an uploaded document, inspect the curriculum or attachment text, then call create_document_draft with the affected courses.
 When the user asks what changed, call diff_course_json or read the relevant draft before answering.
 For broad document requests, use get_curriculum_json to inspect the whole syllabus before proposing edits.
+For version comparison, call get_version to load a snapshot, then diff_versions to compare two versions.
+For statistics and summaries, call get_curriculum_stats for aggregate data or batch_read_courses to read fields from many courses at once.
+For spreadsheet exports, call batch_read_courses to gather data, then create_spreadsheet to generate CSV or Excel files.
 For specialization management, call list_specializations to discover tracks, define_specialization to create one, and assign_elective_to_tracks / get_course_assignments to categorize electives.
 To fetch a public URL, call fetch_url and use the returned text.
 To search the web for current information, call web_search with a query.
 Never apply a draft, never claim a draft was applied, and never claim the refined database was changed.
 After creating a draft, tell the user to review the diff in the Review panel before applying it.
-After calling a tool, summarize the result for the user in natural language. Do not call another tool — stop and respond to the user.
 To change deterministic fields (program, hours, credits, course_type), call update_deterministic_fields. This creates a draft that is blocked until the user explicitly approves it in the Review panel. Confirm with the user before changing these fields.
 
-Course data access — prefer granular tools over full JSON:
-- get_course_codes: lightweight IDs (refined_id, course_code, title, semester) — use for lists/lookups
+Course data access -- prefer granular tools over full JSON:
+- get_course_codes: lightweight IDs (refined_id, course_code, title, semester) -- use for lists/lookups
 - get_course_syllabus: units, objectives, course_outcomes
 - get_course_textbooks: text_books, reference_books
 - get_course_deterministic: program, hours, credits, course_type (read-only, agent-protected)
 - get_course_lab: lab_experiments, tools_languages
 - get_course_fields: arbitrary specific fields (provide field name list)
-- get_current_course_json: full course JSON — only use when you truly need everything
+- batch_read_courses: read specific fields from multiple courses in one call (preferred over looping get_course_fields)
+- get_current_course_json: full course JSON -- only use when you truly need everything
+- get_curriculum_json: full curriculum or filtered by semester
 
-When the user's request is fully addressed (draft created, question answered, report generated), call signal_done with a concise summary of what was accomplished.
+When the user's request is fully addressed (draft created, question answered, report/spreadsheet generated), call signal_done with a concise summary of what was accomplished.
 
 Active context:
 {context or "No active course or document draft is selected."}"""
@@ -170,7 +206,7 @@ def model_messages(session_id: int, rows: list[dict]) -> list[dict]:
         if content:
             messages.append({"role": row["role"], "content": content})
 
-    MAX_CONTENT_CHARS = 20000
+    MAX_CONTENT_CHARS = 30000
     total = sum(len(m["content"]) for m in messages)
     if total > MAX_CONTENT_CHARS and len(messages) >= 2:
         while total > MAX_CONTENT_CHARS and len(messages) >= 2:
@@ -260,10 +296,9 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
 
         def remember_tool_result(name: str, result: dict) -> None:
             tool_results.append({"name": name, "result": result})
-            if name == "create_report":
-                attachment = (result or {}).get("attachment")
-                if attachment and attachment.get("id"):
-                    report_attachment_ids.append(attachment["id"])
+            attachment = (result or {}).get("attachment")
+            if attachment and attachment.get("id"):
+                report_attachment_ids.append(attachment["id"])
 
         def flush_tool_results():
             while tool_results:
@@ -395,4 +430,39 @@ def download_chat_attachment(session_id: int, attachment_id: int):
         content=data,
         media_type=row.get("content_type") or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{row["filename"]}"', "Cache-Control": "no-store"},
+    )
+
+
+@router.get("/chat/sessions/{session_id}/attachments/{attachment_id}/preview")
+def preview_chat_attachment(session_id: int, attachment_id: int):
+    load_chat_session(session_id)
+    row = supabase.table("chat_attachments").select("*").eq("id", attachment_id).eq("session_id", session_id).execute().data
+    if not row:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    row = row[0]
+
+    import base64
+    content_type = row.get("content_type") or ""
+    text = row.get("extracted_text") or ""
+    b64 = row.get("content_base64") or ""
+
+    if content_type in ("text/markdown", "text/csv", "text/plain", "text/html") or content_type.startswith("text/"):
+        return Response(
+            content=text.encode(),
+            media_type=content_type,
+            headers={"Content-Disposition": "inline", "Cache-Control": "no-store"},
+        )
+
+    if b64:
+        data = base64.b64decode(b64)
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={"Content-Disposition": "inline", "Cache-Control": "no-store"},
+        )
+
+    return Response(
+        content=text.encode(),
+        media_type="text/plain",
+        headers={"Content-Disposition": "inline", "Cache-Control": "no-store"},
     )

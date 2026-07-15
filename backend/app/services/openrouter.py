@@ -149,8 +149,8 @@ def _chat_message(messages: list[dict], tools: list[dict]) -> dict:
 
 
 def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_tool_result=None):
-    for _ in range(5):
-        yield {"$status": f"Thinking... (attempt {_ + 1}/5)"}
+    for _ in range(8):
+        yield {"$status": f"Thinking... (attempt {_ + 1}/8)"}
         message = _chat_message(messages, tools)
         tool_calls = message.get("tool_calls") or []
         if not tool_calls:

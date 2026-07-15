@@ -22,6 +22,8 @@ const deleteChat = document.getElementById("delete-chat");
 const newChat = document.getElementById("new-chat");
 const chatLog = document.getElementById("chat-log");
 const chatStatus = document.getElementById("chat-status");
+const chatStatusText = document.getElementById("chat-status-text");
+const chatSpinner = document.getElementById("chat-spinner");
 const message = document.getElementById("message");
 const attach = document.getElementById("attach");
 const files = document.getElementById("files");
@@ -40,6 +42,10 @@ const previewDraft = document.getElementById("preview-draft");
 const applyDraft = document.getElementById("apply-draft");
 const togglePane = document.getElementById("toggle-pane");
 const logoutBtn = document.getElementById("logout-btn");
+const previewOverlay = document.getElementById("preview-overlay");
+const previewFilename = document.getElementById("preview-filename");
+const previewBody = document.getElementById("preview-body");
+const previewClose = document.getElementById("preview-close");
 let activeCourseId = "";
 let activeDraftId = "";
 let activeDocumentDraftId = "";
@@ -298,7 +304,29 @@ function attachmentNode(file, index, removable) {
     visual.alt = "";
   } else {
     visual.className = "attachment-icon";
-    visual.textContent = "FILE";
+    const mime = (file.type || "").toLowerCase();
+    let icon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+    let label = "FILE";
+    if (mime.includes("pdf")) {
+      icon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15h2"/><path d="M9 11h6"/><path d="M9 19h6"/></svg>`;
+      label = "PDF";
+    } else if (mime.includes("spreadsheet") || mime.includes("excel") || mime.endsWith(".xlsx") || mime.endsWith(".csv")) {
+      icon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>`;
+      label = "XLS";
+    } else if (mime.includes("word") || mime.includes("document") || mime.endsWith(".doc") || mime.endsWith(".docx")) {
+      icon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>`;
+      label = "DOC";
+    } else if (mime.includes("markdown") || (file.name || "").endsWith(".md")) {
+      icon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M7 15V9l2.5 3L12 9v6"/><path d="M14 15l2-3 2 3"/></svg>`;
+      label = "MD";
+    } else if (mime.includes("text") || mime.endsWith(".txt")) {
+      icon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg>`;
+      label = "TXT";
+    } else if (mime.includes("image")) {
+      icon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+      label = "IMG";
+    }
+    visual.innerHTML = `<span class="attachment-icon-label">${label}</span>${icon}`;
   }
   const text = document.createElement("div");
   const name = document.createElement("div");
@@ -312,6 +340,8 @@ function attachmentNode(file, index, removable) {
   meta.textContent = `${file.type || "file"} - ${formatSize(file.size || 0)}${status}${extracted}`;
   text.append(name, meta);
   item.append(visual, text);
+  const actions = document.createElement("div");
+  actions.className = "attachment-actions";
   if (removable) {
     const remove = document.createElement("button");
     remove.className = "attachment-remove";
@@ -321,23 +351,117 @@ function attachmentNode(file, index, removable) {
       queuedFiles.splice(index, 1);
       renderDraftAttachments();
     });
-    item.appendChild(remove);
+    actions.appendChild(remove);
   } else if (file.id) {
+    const preview = document.createElement("button");
+    preview.className = "attachment-preview";
+    preview.type = "button";
+    preview.textContent = "Preview";
+    preview.addEventListener("click", () => openPreview(file));
+    actions.appendChild(preview);
     const dl = document.createElement("a");
     dl.className = "attachment-download";
     dl.href = `/api/chat/sessions/${activeSessionId}/attachments/${file.id}/download`;
     dl.download = file.name || "download";
-    dl.textContent = "Download";
-    item.appendChild(dl);
-  } else {
-    item.appendChild(document.createElement("span"));
+    dl.title = "Download";
+    dl.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+    actions.appendChild(dl);
   }
+  item.appendChild(actions);
   return item;
 }
 
 function renderDraftAttachments() {
   draftAttachments.replaceChildren(...queuedFiles.map((file, index) => attachmentNode(file, index, true)));
 }
+
+async function openPreview(file) {
+  if (!file.id || !activeSessionId) return;
+  previewFilename.textContent = file.name || "Preview";
+  previewBody.innerHTML = '<div class="preview-loading">Loading preview...</div>';
+  previewOverlay.hidden = false;
+  const mime = (file.type || "").toLowerCase();
+  const name = (file.name || "").toLowerCase();
+  try {
+    const url = `/api/chat/sessions/${activeSessionId}/attachments/${file.id}/preview`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Preview failed");
+    if (mime === "application/pdf" || name.endsWith(".pdf")) {
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      previewBody.innerHTML = `<iframe src="${blobUrl}" class="preview-iframe"></iframe>`;
+    } else if (mime.includes("markdown") || name.endsWith(".md")) {
+      const text = await response.text();
+      const html = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(text)) : marked.parse(text);
+      previewBody.innerHTML = `<div class="preview-rendered">${html}</div>`;
+    } else if (mime.includes("spreadsheet") || mime.includes("excel") || name.endsWith(".xlsx") || name.endsWith(".csv")) {
+      const text = await response.text();
+      const table = csvToTable(text, name.endsWith(".csv"));
+      previewBody.innerHTML = table;
+    } else if (mime.includes("word") || name.endsWith(".doc") || name.endsWith(".docx")) {
+      const text = await response.text();
+      previewBody.innerHTML = `<pre class="preview-text">${escapeHtml(text)}</pre>`;
+    } else {
+      const text = await response.text();
+      previewBody.innerHTML = `<pre class="preview-text">${escapeHtml(text)}</pre>`;
+    }
+  } catch (error) {
+    previewBody.innerHTML = `<div class="preview-error">Could not load preview.</div>`;
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function csvToTable(text, isCsv) {
+  const lines = text.split("\n").filter((l) => l.trim());
+  if (!lines.length) return `<pre class="preview-text">${escapeHtml(text)}</pre>`;
+  const rows = lines.map((line) => {
+    const cells = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+        else if (ch === '"') inQuotes = false;
+        else current += ch;
+      } else {
+        if (ch === '"') inQuotes = true;
+        else if (ch === "\t" || (isCsv && ch === ",")) { cells.push(current); current = ""; }
+        else current += ch;
+      }
+    }
+    cells.push(current);
+    return cells;
+  });
+  const header = rows.shift();
+  if (!header) return `<pre class="preview-text">${escapeHtml(text)}</pre>`;
+  let html = '<table class="preview-table"><thead><tr>';
+  header.forEach((h) => { html += `<th>${escapeHtml(h)}</th>`; });
+  html += "</tr></thead><tbody>";
+  rows.forEach((row) => {
+    html += "<tr>";
+    row.forEach((cell) => { html += `<td>${escapeHtml(cell)}</td>`; });
+    html += "</tr>";
+  });
+  html += "</tbody></table>";
+  return html;
+}
+
+function closePreview() {
+  previewOverlay.hidden = true;
+  previewBody.innerHTML = "";
+  const iframe = previewBody.querySelector("iframe");
+  if (iframe && iframe.src.startsWith("blob:")) URL.revokeObjectURL(iframe.src);
+}
+
+previewClose.addEventListener("click", closePreview);
+previewOverlay.addEventListener("click", (e) => { if (e.target === previewOverlay) closePreview(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !previewOverlay.hidden) closePreview(); });
 
 function messageNode(item) {
   const bubble = document.createElement("div");
@@ -734,7 +858,7 @@ async function loadDocumentPreview() {
   semester.disabled = true;
   editor.value = "";
   resetReview();
-  chatStatus.textContent = "";
+  chatStatusText.textContent = "";
   loading.classList.add("active");
   viewer.src = "/api/preview/pdf";
   setStatus("Full Document");
@@ -873,7 +997,10 @@ send.addEventListener("click", async () => {
 
     let answer = "";
     await readEventStream(response, ({ event, data }) => {
-      if (event === "status") { chatStatus.textContent = data.message || ""; }
+      if (event === "status") {
+        chatStatusText.textContent = data.message || "";
+        chatSpinner.classList.add("active");
+      }
       if (event === "token") {
         if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
         answer += data.text || "";
@@ -882,30 +1009,29 @@ send.addEventListener("click", async () => {
       }
       if (event === "tool_call") {
         const toolMsg = `⚙ ${data.name}(${JSON.stringify(data.arguments)})`;
-        if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
         const node = appendMessage({ role: "tool", content: toolMsg, created_at: new Date().toISOString() });
         node.bubble.classList.add("tool-call");
       }
       if (event === "tool_result") {
         const status = data.status === "ok" ? "✓" : "✗";
         const toolMsg = `${status} ${data.name} completed`;
-        if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
         const node = appendMessage({ role: "tool", content: toolMsg, created_at: new Date().toISOString() });
         node.bubble.classList.add("tool-result");
       }
       if (event === "draft" && data.draft) {
         if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
-        if (!answer) renderMessageContent(assistant.content, "Draft ready for review.");
+        if (!answer) { answer = "Draft ready for review."; renderMessageContent(assistant.content, answer); }
         showCourseDraft(data.draft);
       }
       if (event === "document_draft" && data.document_draft) {
         if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
-        if (!answer) renderMessageContent(assistant.content, "Document draft ready for review.");
+        if (!answer) { answer = "Document draft ready for review."; renderMessageContent(assistant.content, answer); }
         loadDocumentDraftById(data.document_draft.id).catch(showError);
       }
       if (event === "error") throw new Error(data.message || "Chat failed");
       if (event === "done") {
-        chatStatus.textContent = "";
+        chatStatusText.textContent = "";
+        chatSpinner.classList.remove("active");
         if (data.summary) {
           setStatus(data.summary, "ready");
           if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
@@ -917,7 +1043,8 @@ send.addEventListener("click", async () => {
     });
   } catch (error) {
     const text = error instanceof Error ? error.message : "Chat failed";
-    chatStatus.textContent = text;
+    chatStatusText.textContent = text;
+    chatSpinner.classList.remove("active");
     setStatus(text, "error");
     if (assistant) {
       assistant.bubble.classList.add("error");

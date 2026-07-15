@@ -10,7 +10,7 @@ from weasyprint import HTML
 
 from app.services.curriculum import create_version_snapshot, draft_record, load_agent_draft, load_document_draft, ordered_courses, refined_course, selected_curriculum_year
 from app.services.diffing import diff_course
-from app.supabase import supabase
+from app.supabase import first_row, supabase
 
 
 def _markdown_to_html(md: str) -> str:
@@ -548,6 +548,252 @@ def _signal_done(arguments: dict) -> dict:
     return {"done": True, "summary": summary}
 
 
+def _create_spreadsheet(arguments: dict) -> dict:
+    """Generate CSV or Excel file from rows data and save as chat attachment."""
+    session_id = _require_int(arguments, "session_id")
+    rows = arguments.get("rows")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("rows must be a non-empty array of objects")
+    columns = arguments.get("columns")
+    if not isinstance(columns, list) or not columns:
+        raise ValueError("columns must be a non-empty array of column names")
+    filename = str(arguments.get("filename") or "spreadsheet.csv").strip()
+    fmt = str(arguments.get("format") or "csv").strip().lower()
+    if fmt not in ("csv", "xlsx"):
+        raise ValueError("format must be 'csv' or 'xlsx'")
+
+    if fmt == "xlsx":
+        import io
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Data"
+
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        header_fill = PatternFill(start_color="00377B", end_color="00377B", fill_type="solid")
+        thin_border = Border(
+            left=Side(style="thin"), right=Side(style="thin"),
+            top=Side(style="thin"), bottom=Side(style="thin"),
+        )
+
+        for col_idx, col_name in enumerate(columns, 1):
+            cell = ws.cell(row=1, column=col_idx, value=col_name)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = thin_border
+
+        for row_idx, row_data in enumerate(rows, 2):
+            for col_idx, col_name in enumerate(columns, 1):
+                value = row_data.get(col_name, "")
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = thin_border
+                cell.alignment = Alignment(wrap_text=True)
+
+        for col_idx, col_name in enumerate(columns, 1):
+            max_len = len(str(col_name))
+            for row_idx in range(2, len(rows) + 2):
+                val = str(ws.cell(row=row_idx, column=col_idx).value or "")
+                max_len = max(max_len, min(len(val), 60))
+            ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = max_len + 2
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        file_bytes = buf.read()
+
+        if not filename.endswith(".xlsx"):
+            filename = filename.rsplit(".", 1)[0] + ".xlsx"
+        content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        extracted_text = f"[Excel file - {len(file_bytes)} bytes, {len(rows)} rows]"
+        content_base64 = base64.b64encode(file_bytes).decode()
+        size_bytes = len(file_bytes)
+    else:
+        import io
+        import csv
+
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for row_data in rows:
+            writer.writerow({k: v for k, v in row_data.items() if k in columns})
+        csv_text = buf.getvalue()
+
+        if not filename.endswith(".csv"):
+            filename = filename.rsplit(".", 1)[0] + ".csv"
+        content_type = "text/csv"
+        extracted_text = csv_text
+        content_base64 = ""
+        size_bytes = len(csv_text.encode())
+
+    row = (
+        supabase.table("chat_attachments")
+        .insert({
+            "session_id": session_id,
+            "filename": filename,
+            "content_type": content_type,
+            "size_bytes": size_bytes,
+            "extracted_text": extracted_text,
+            "content_base64": content_base64,
+            "status": "ready",
+        })
+        .execute()
+        .data[0]
+    )
+    return {"attachment": {"id": row["id"], "filename": row["filename"], "rows": len(rows), "columns": columns, "format": fmt}}
+
+
+def _get_version(arguments: dict) -> dict:
+    """Load a curriculum version snapshot with its course list."""
+    version_id = _require_int(arguments, "version_id")
+    version_row = first_row(supabase.table("curriculum_versions").select("*").eq("id", version_id))
+    if not version_row:
+        raise ValueError(f"Version {version_id} not found")
+    snapshot_rows = (
+        supabase.table("finalized_submissions")
+        .select("refined_id,course_json")
+        .eq("curriculum_version_id", version_id)
+        .order("refined_id")
+        .execute()
+        .data
+    )
+    courses = []
+    for snap in snapshot_rows:
+        cj = snap.get("course_json") or {}
+        courses.append({
+            "refined_id": snap.get("refined_id"),
+            "course_code": cj.get("course_code", ""),
+            "course_title": cj.get("course_title", ""),
+            "semester": cj.get("semester", ""),
+            "credits": cj.get("credits", ""),
+        })
+    return {"version": version_row, "courses": courses, "course_count": len(courses)}
+
+
+def _diff_versions(arguments: dict) -> dict:
+    """Compare two curriculum version snapshots. Shows added, removed, and changed courses."""
+    version_a_id = _require_int(arguments, "version_a")
+    version_b_id = _require_int(arguments, "version_b")
+
+    def _load_snapshot(vid: int) -> dict:
+        rows = (
+            supabase.table("finalized_submissions")
+            .select("refined_id,course_json")
+            .eq("curriculum_version_id", vid)
+            .execute()
+            .data
+        )
+        return {row["refined_id"]: row.get("course_json") or {} for row in rows}
+
+    snap_a = _load_snapshot(version_a_id)
+    snap_b = _load_snapshot(version_b_id)
+
+    all_ids = set(snap_a.keys()) | set(snap_b.keys())
+    added = []
+    removed = []
+    changed = []
+    unchanged = []
+
+    for rid in sorted(all_ids):
+        a = snap_a.get(rid)
+        b = snap_b.get(rid)
+        if a and not b:
+            removed.append({"refined_id": rid, "course_code": a.get("course_code", ""), "course_title": a.get("course_title", "")})
+        elif b and not a:
+            added.append({"refined_id": rid, "course_code": b.get("course_code", ""), "course_title": b.get("course_title", "")})
+        elif a != b:
+            d = diff_course(a, b)
+            changed.append({
+                "refined_id": rid,
+                "course_code": b.get("course_code", ""),
+                "course_title": b.get("course_title", ""),
+                "change_percent": d.get("change_percent", 0),
+                "syllabus_change_percent": d.get("syllabus_change_percent", 0),
+                "topics_added": d.get("topics_added", []),
+                "topics_removed": d.get("topics_removed", []),
+            })
+        else:
+            unchanged.append(rid)
+
+    return {
+        "version_a": version_a_id,
+        "version_b": version_b_id,
+        "added": added,
+        "removed": removed,
+        "changed": changed,
+        "unchanged_count": len(unchanged),
+        "summary": {
+            "added": len(added),
+            "removed": len(removed),
+            "changed": len(changed),
+            "unchanged": len(unchanged),
+        },
+    }
+
+
+def _get_curriculum_stats(arguments: dict) -> dict:
+    """Compute aggregate statistics for the curriculum or a specific semester."""
+    query = supabase.table("refined_submissions").select("semester,credits,course_type,credit_category,lecture_hours,practical_hours,visible,is_elective").neq("status", "archived")
+    if arguments.get("semester") is not None:
+        query = query.eq("semester", int(arguments["semester"]))
+    rows = query.execute().data
+
+    if not rows:
+        return {"stats": {}, "message": "No courses found"}
+
+    by_semester: dict[int, dict] = {}
+    for row in rows:
+        sem = int(row.get("semester") or 0)
+        if sem not in by_semester:
+            by_semester[sem] = {"total": 0, "visible": 0, "total_credits": 0, "electives": 0, "course_types": {}, "credit_categories": {}}
+        s = by_semester[sem]
+        s["total"] += 1
+        if row.get("visible", True):
+            s["visible"] += 1
+        s["total_credits"] += int(row.get("credits") or 0)
+        if row.get("is_elective"):
+            s["electives"] += 1
+        ct = str(row.get("course_type") or "Unknown")
+        s["course_types"][ct] = s["course_types"].get(ct, 0) + 1
+        cc = str(row.get("credit_category") or "?")
+        s["credit_categories"][cc] = s["credit_categories"].get(cc, 0) + 1
+
+    total_credits = sum(s["total_credits"] for s in by_semester.values())
+    total_courses = sum(s["total"] for s in by_semester.values())
+
+    return {
+        "total_courses": total_courses,
+        "total_credits": total_credits,
+        "by_semester": {str(k): v for k, v in sorted(by_semester.items())},
+    }
+
+
+def _batch_read_courses(arguments: dict) -> dict:
+    """Read specific fields from multiple courses in one call. More efficient than multiple get_course_fields calls."""
+    refined_ids = arguments.get("refined_ids")
+    if not isinstance(refined_ids, list) or not refined_ids:
+        raise ValueError("refined_ids must be a non-empty array of integers")
+    fields = arguments.get("fields")
+    if not isinstance(fields, list) or not fields:
+        raise ValueError("fields must be a non-empty array of field names")
+
+    results = []
+    for rid in refined_ids:
+        rid = int(rid)
+        course = refined_course(rid)
+        if course is None:
+            results.append({"refined_id": rid, "error": "Course not found"})
+            continue
+        entry = {"refined_id": rid}
+        for field in fields:
+            entry[field] = course.get(field)
+        results.append(entry)
+
+    return {"courses": results, "count": len(results)}
+
+
 OBJECT = {"type": "object", "additionalProperties": False}
 
 TOOLS: dict[str, AgentTool] = {
@@ -825,5 +1071,70 @@ TOOLS: dict[str, AgentTool] = {
             "required": ["summary"],
         },
         _signal_done,
+    ),
+    "create_spreadsheet": AgentTool(
+        "create_spreadsheet",
+        "Generate a CSV or Excel file from structured row data and save as a downloadable chat attachment. Provide column names and row objects.",
+        {
+            **OBJECT,
+            "properties": {
+                "session_id": {"type": "integer"},
+                "columns": {"type": "array", "items": {"type": "string"}, "description": "Column names in display order"},
+                "rows": {"type": "array", "items": {"type": "object"}, "description": "Array of row objects, keys matching column names"},
+                "filename": {"type": "string", "description": "Filename including extension, e.g. semester-3-courses.xlsx"},
+                "format": {"type": "string", "enum": ["csv", "xlsx"], "default": "csv"},
+            },
+            "required": ["session_id", "columns", "rows"],
+        },
+        _create_spreadsheet,
+    ),
+    "get_version": AgentTool(
+        "get_version",
+        "Load a curriculum version snapshot with its metadata and course list. Use to inspect what a version contains before comparing or restoring.",
+        {
+            **OBJECT,
+            "properties": {
+                "version_id": {"type": "integer", "description": "Version snapshot ID"},
+            },
+            "required": ["version_id"],
+        },
+        _get_version,
+    ),
+    "diff_versions": AgentTool(
+        "diff_versions",
+        "Compare two curriculum version snapshots. Returns added, removed, and changed courses with per-course change percentages.",
+        {
+            **OBJECT,
+            "properties": {
+                "version_a": {"type": "integer", "description": "First version ID (base)"},
+                "version_b": {"type": "integer", "description": "Second version ID (target)"},
+            },
+            "required": ["version_a", "version_b"],
+        },
+        _diff_versions,
+    ),
+    "get_curriculum_stats": AgentTool(
+        "get_curriculum_stats",
+        "Compute aggregate curriculum statistics: total courses, credits per semester, course type distribution, visible vs hidden counts. Optionally filter to one semester.",
+        {
+            **OBJECT,
+            "properties": {
+                "semester": {"type": "integer", "minimum": 1, "maximum": 8, "description": "Optional: stats for one semester only"},
+            },
+        },
+        _get_curriculum_stats,
+    ),
+    "batch_read_courses": AgentTool(
+        "batch_read_courses",
+        "Read specific fields from multiple courses in one call. More efficient than calling get_course_fields multiple times. Returns an array of course field subsets.",
+        {
+            **OBJECT,
+            "properties": {
+                "refined_ids": {"type": "array", "items": {"type": "integer"}, "description": "List of course refined IDs to read"},
+                "fields": {"type": "array", "items": {"type": "string"}, "description": "Field names to read for each course"},
+            },
+            "required": ["refined_ids", "fields"],
+        },
+        _batch_read_courses,
     ),
 }

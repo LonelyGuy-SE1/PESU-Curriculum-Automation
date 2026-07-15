@@ -232,18 +232,26 @@ tools, create drafts for changes, and never apply them.
 
 **Tools** (`services/agent_tools.py`, registered in `TOOLS`):
 
-*Read*
+*Read (course data)*
 - `get_current_course_json` — full template-ready course JSON
 - `get_course_codes` — lightweight IDs (refined_id, code, title, semester)
 - `get_course_syllabus` — units, objectives, course_outcomes
 - `get_course_textbooks` — text_books, reference_books
 - `get_course_deterministic` — protected fields (read-only context)
 - `get_course_lab` — lab experiments, tools/languages
-- `get_course_fields` — arbitrary field subset
+- `get_course_fields` — arbitrary field subset for one course
+- `batch_read_courses` — read specific fields from multiple courses in one call
 - `get_curriculum_json` — full curriculum, optionally by semester
-- `list_courses` — course IDs/titles
+- `list_courses` — course IDs/titles, optionally by semester
+- `get_curriculum_stats` — aggregate statistics (total courses, credits per semester, course type distribution)
+
+*Read (comparison/drafts)*
 - `diff_course_json` — compare two course JSONs
 - `get_course_draft` / `get_document_draft` — read staged drafts
+- `get_version` — load a curriculum version snapshot with its course list
+- `diff_versions` — compare two version snapshots (added/removed/changed courses)
+
+*Read (specialization/external)*
 - `get_course_assignments` — which specialization tracks a course belongs to
 - `list_specializations` — list track definitions
 - `get_attachment_text` — read uploaded chat attachments
@@ -257,7 +265,12 @@ tools, create drafts for changes, and never apply them.
 - `define_specialization` — create a track
 - `update_deterministic_fields` — **the only** way to change protected fields;
   produces a `blocked` draft that requires explicit user approval
-- `create_report` / `create_curriculum_version` / `signal_done`
+
+*Generate (files/reports)*
+- `create_spreadsheet` — generate CSV or Excel (.xlsx) files from structured row data
+- `create_report` — generate markdown or PDF reports
+- `create_curriculum_version` — snapshot the current curriculum state
+- `signal_done` — signal task completion with a summary
 
 **Protected fields.** `diffing.PROTECTED_FIELDS` = `program, lecture_hours,
 tutorial_hours, practical_hours, self_study, credits, course_type`. Drafts that
