@@ -12,6 +12,66 @@ KEY = os.environ["OPENROUTER_API_KEY"].strip()
 MODEL = os.environ["OPENROUTER_MODEL"].strip()
 logger = logging.getLogger(__name__)
 
+_context_length: int | None = None
+
+
+def fetch_context_length() -> int:
+    global _context_length
+    if _context_length is not None:
+        return _context_length
+    api_base = URL.rsplit("/chat/completions", 1)[0]
+    try:
+        with Client(timeout=10) as client:
+            resp = client.get(f"{api_base}/model/{MODEL}", headers=_headers())
+            resp.raise_for_status()
+            data = resp.json().get("data") or {}
+            _context_length = int(data.get("context_length") or 128000)
+            logger.info("Model %s context_length=%d", MODEL, _context_length)
+            return _context_length
+    except Exception as exc:
+        logger.warning("Failed to fetch context_length for %s: %s", MODEL, exc)
+        _context_length = 128000
+        return _context_length
+
+
+def context_length() -> int:
+    return _context_length or 128000
+
+
+_TOOL_LABELS = {
+    "get_course_codes": "Looking up courses",
+    "get_current_course_json": "Reading course data",
+    "get_course_syllabus": "Reading syllabus",
+    "get_course_textbooks": "Reading textbooks",
+    "get_course_deterministic": "Reading course properties",
+    "get_course_lab": "Reading lab details",
+    "get_course_fields": "Reading course fields",
+    "batch_read_courses": "Reading courses",
+    "get_curriculum_json": "Loading curriculum",
+    "get_curriculum_stats": "Computing statistics",
+    "create_course_draft": "Creating draft",
+    "create_document_draft": "Creating document draft",
+    "create_report": "Generating report",
+    "create_spreadsheet": "Generating spreadsheet",
+    "diff_course_json": "Comparing courses",
+    "diff_versions": "Comparing versions",
+    "get_version": "Loading snapshot",
+    "update_course_field": "Updating course",
+    "update_deterministic_fields": "Updating course",
+    "get_attachment_text": "Reading attachment",
+    "list_specializations": "Loading specializations",
+    "define_specialization": "Creating specialization",
+    "assign_elective_to_tracks": "Categorizing elective",
+    "get_course_assignments": "Reading elective assignments",
+    "fetch_url": "Fetching URL",
+    "web_search": "Searching the web",
+    "signal_done": "Finalizing",
+}
+
+
+def tool_status_label(name: str) -> str:
+    return _TOOL_LABELS.get(name, name.replace("_", " ").title())
+
 
 class OpenRouterError(RuntimeError):
     def __init__(self, status_code: int, retry_after: str | None = None, message: str | None = None, provider_message: str = ""):
@@ -141,28 +201,36 @@ def _chat_text(messages: list[dict]) -> str:
         return _message_content(response.json())
 
 
-def _chat_message(messages: list[dict], tools: list[dict]) -> dict:
+def _chat_message(messages: list[dict], tools: list[dict]) -> tuple[dict, int]:
     with Client(timeout=120) as client:
         response = client.post(URL, headers=_headers(), json={"model": MODEL, "messages": messages, "tools": tools})
         _raise_for_status(response)
-        return _assistant_message(response.json())
+        data = response.json()
+        prompt_tokens = (data.get("usage") or {}).get("prompt_tokens") or 0
+        return _assistant_message(data), prompt_tokens
 
 
 def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_tool_result=None):
-    for _ in range(8):
-        yield {"$status": f"Thinking... (attempt {_ + 1}/8)"}
-        message = _chat_message(messages, tools)
+    last_prompt_tokens = 0
+    for i in range(15):
+        yield {"$status": f"Thinking (step {i + 1})..."}
+        message, prompt_tokens = _chat_message(messages, tools)
+        if prompt_tokens:
+            last_prompt_tokens = prompt_tokens
         tool_calls = message.get("tool_calls") or []
         if not tool_calls:
             text = str(message.get("content") or "").strip()
             if text:
                 yield text
+            if last_prompt_tokens:
+                yield {"$usage": {"prompt_tokens": last_prompt_tokens, "context_length": context_length()}}
             return
 
         messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": tool_calls})
         for tool_call in tool_calls:
             name = (tool_call.get("function") or {}).get("name") or ""
             arguments = _tool_arguments(tool_call)
+            yield {"$status": f"{tool_status_label(name)}..."}
             yield {"$event": "tool_call", "name": name, "arguments": arguments}
             try:
                 result = _run_tool(tool_runner, name, arguments)
@@ -180,6 +248,8 @@ def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_to
                 }
             )
     yield "I created tool results, but could not finish the response. Please check the Review panel."
+    if last_prompt_tokens:
+        yield {"$usage": {"prompt_tokens": last_prompt_tokens, "context_length": context_length()}}
 
 
 def _tool_arguments(tool_call: dict) -> dict:
@@ -222,3 +292,9 @@ def _stream_token(line: str) -> str:
     choice = (chunk.get("choices") or [{}])[0]
     delta = choice.get("delta") or {}
     return delta.get("content") or ""
+
+
+try:
+    fetch_context_length()
+except Exception:
+    pass

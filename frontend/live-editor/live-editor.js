@@ -1,3 +1,25 @@
+if (typeof marked !== "undefined") {
+  marked.use({ gfm: true, breaks: false });
+}
+
+function preprocessUrls(text) {
+  return text.replace(
+    /(?<!\()(https?:\/\/[^\s<>"')\]]+)/g,
+    (url) => {
+      const clean = url.replace(/[.,;:!?]+$/, "");
+      const trailing = url.slice(clean.length);
+      return `[${clean}](${clean})${trailing}`;
+    }
+  );
+}
+
+function yearParam(base) {
+  const y = localStorage.getItem("curriculumYear") || "";
+  if (!y) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}curriculum_year=${encodeURIComponent(y)}`;
+}
+
 const semester = document.getElementById("semester");
 const course = document.getElementById("course");
 const viewMode = document.getElementById("view-mode");
@@ -32,8 +54,8 @@ const send = document.getElementById("send");
 const editor = document.getElementById("editor");
 const draft = document.getElementById("draft");
 const save = document.getElementById("save");
-const courseDraftSelect = document.getElementById("course-draft-select"); // commented: unused (drafts auto-load via chat)
-const loadCourseDraft = document.getElementById("load-course-draft"); // commented: unused
+const courseDraftSelect = document.getElementById("course-draft-select");
+const loadCourseDraft = document.getElementById("load-course-draft");
 const documentDraftSelect = document.getElementById("document-draft-select");
 const loadDocumentDraft = document.getElementById("load-document-draft");
 const reviewSummary = document.getElementById("review-summary");
@@ -46,6 +68,45 @@ const previewOverlay = document.getElementById("preview-overlay");
 const previewFilename = document.getElementById("preview-filename");
 const previewBody = document.getElementById("preview-body");
 const previewClose = document.getElementById("preview-close");
+const contextBadge = document.getElementById("context-badge");
+const contextUsage = document.getElementById("context-usage");
+
+fetch("/api/agent/context-length").then((r) => r.json()).then((d) => {
+  const tokens = d.context_length || 0;
+  contextBadge.textContent = tokens >= 1000000 ? `${tokens / 1000000}M` : tokens >= 1000 ? `${Math.round(tokens / 1000)}K` : `${tokens}`;
+  contextBadge.title = `${d.model} - ${tokens.toLocaleString()} tokens`;
+}).catch(() => {});
+
+const TOOL_LABELS = {
+  get_course_codes: "Looking up courses",
+  get_current_course_json: "Reading course data",
+  get_course_syllabus: "Reading syllabus",
+  get_course_textbooks: "Reading textbooks",
+  get_course_deterministic: "Reading course properties",
+  get_course_lab: "Reading lab details",
+  get_course_fields: "Reading course fields",
+  batch_read_courses: "Reading courses",
+  get_curriculum_json: "Loading curriculum",
+  get_curriculum_stats: "Computing statistics",
+  create_course_draft: "Creating draft",
+  create_document_draft: "Creating document draft",
+  create_report: "Generating report",
+  create_spreadsheet: "Generating spreadsheet",
+  diff_course_json: "Comparing courses",
+  diff_versions: "Comparing versions",
+  get_version: "Loading snapshot",
+  update_course_field: "Updating course",
+  update_deterministic_fields: "Updating course",
+  get_attachment_text: "Reading attachment",
+  list_specializations: "Loading specializations",
+  define_specialization: "Creating specialization",
+  assign_elective_to_tracks: "Categorizing elective",
+  get_course_assignments: "Reading elective assignments",
+  fetch_url: "Fetching URL",
+  web_search: "Searching the web",
+  signal_done: "Finalizing",
+};
+
 let activeCourseId = "";
 let activeDraftId = "";
 let activeDocumentDraftId = "";
@@ -392,7 +453,7 @@ async function openPreview(file) {
       previewBody.innerHTML = `<iframe src="${blobUrl}" class="preview-iframe"></iframe>`;
     } else if (mime.includes("markdown") || name.endsWith(".md")) {
       const text = await response.text();
-      const html = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(text)) : marked.parse(text);
+      const html = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(preprocessUrls(text))) : marked.parse(preprocessUrls(text));
       previewBody.innerHTML = `<div class="preview-rendered">${html}</div>`;
     } else if (mime.includes("spreadsheet") || mime.includes("excel") || name.endsWith(".xlsx") || name.endsWith(".csv")) {
       const text = await response.text();
@@ -486,7 +547,7 @@ function messageNode(item) {
 
 function renderInline(parent, text) {
   if (typeof marked !== "undefined") {
-    parent.innerHTML = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(text)) : marked.parse(text);
+    parent.innerHTML = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(preprocessUrls(text))) : marked.parse(preprocessUrls(text));
     return;
   }
   const pattern = /(\*\*[^*]+\*\*|`[^`]+`|https?:\/\/[^\s<>"']+)/g;
@@ -522,7 +583,7 @@ function renderMessageContent(target, value) {
   target.replaceChildren();
   const text = String(value || "");
   if (typeof marked !== "undefined") {
-    target.innerHTML = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(text)) : marked.parse(text);
+    target.innerHTML = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(preprocessUrls(text))) : marked.parse(preprocessUrls(text));
     return;
   }
   const lines = text.split("\n");
@@ -683,7 +744,7 @@ function renderDraftReview(draftRow) {
 
 function showCourseDraft(draftRow) {
   renderDraftReview(draftRow);
-  viewer.src = `/api/agent/drafts/${draftRow.id}/preview?diff=1`;
+  viewer.src = yearParam(`/api/agent/drafts/${draftRow.id}/preview?diff=1`);
   setStatus("Draft ready for review.", "ready");
   refreshDraftSelectors().catch(showError);
   setTab("review");
@@ -723,7 +784,7 @@ async function loadDocumentDraftById(id) {
   );
   previewDraft.disabled = false;
   applyDraft.disabled = body.document_draft.status !== "proposed" || Boolean(summary.courses_with_protected_changes);
-  viewer.src = `/api/agent/document-drafts/${id}/preview?diff=1`;
+  viewer.src = yearParam(`/api/agent/document-drafts/${id}/preview?diff=1`);
   await refreshDraftSelectors();
   documentDraftSelect.value = String(id);
   setTab("review");
@@ -748,14 +809,13 @@ async function refreshDraftSelectors() {
   ]);
   if (courseResponse.ok) {
     const body = await courseResponse.json();
-    // courseDraftSelect is commented out in HTML; skip populating
-    // courseDraftSelect.replaceChildren(...(body.drafts || []).filter((item) => item.status !== "applied").map((item) => option(String(item.id), courseDraftLabel(item))));
+    courseDraftSelect.replaceChildren(...(body.drafts || []).filter((item) => item.status !== "applied").map((item) => option(String(item.id), courseDraftLabel(item))));
   }
   if (documentResponse.ok) {
     const body = await documentResponse.json();
     documentDraftSelect.replaceChildren(...(body.document_drafts || []).filter((item) => item.status !== "applied").map((item) => option(String(item.id), documentDraftLabel(item))));
   }
-  // if (activeDraftId) courseDraftSelect.value = activeDraftId;
+  if (activeDraftId) courseDraftSelect.value = activeDraftId;
 }
 
 function filePreview(file) {
@@ -817,7 +877,7 @@ async function loadCourse(id) {
   if (!response.ok) throw new Error("Unable to load course");
   const row = await response.json();
   editor.value = JSON.stringify(row.fields || {}, null, 2);
-  viewer.src = `/api/preview/course/${id}`;
+  viewer.src = yearParam(`/api/preview/course/${id}`);
   const title = row.fields?.course_title || `Course ${id}`;
   setStatus(title);
   const selected = course.querySelector(`option[value="${id}"]`);
@@ -840,7 +900,7 @@ async function loadVersionCourse(versionId, refinedId) {
   if (!response.ok) throw new Error("Unable to load version course");
   const body = await response.json();
   editor.value = JSON.stringify(body.fields || {}, null, 2);
-  viewer.src = `/api/versions/${versionId}/courses/${refinedId}/preview`;
+  viewer.src = yearParam(`/api/versions/${versionId}/courses/${refinedId}/preview`);
   setStatus(`${body.version.name}: ${body.fields?.course_title || `Course ${refinedId}`}`);
   queuedFiles = [];
   renderDraftAttachments();
@@ -860,7 +920,7 @@ async function loadDocumentPreview() {
   resetReview();
   chatStatusText.textContent = "";
   loading.classList.add("active");
-  viewer.src = "/api/preview/pdf";
+  viewer.src = yearParam("/api/preview/pdf");
   setStatus("Full Document");
   await ensureChatSession();
   await renderMessages();
@@ -972,6 +1032,8 @@ send.addEventListener("click", async () => {
   const content = message.value.trim();
   if (!content && !queuedFiles.length) return;
   send.disabled = true;
+  chatStatusText.textContent = "Analyzing...";
+  chatSpinner.classList.add("active");
   let assistant = null;
   try {
     await ensureChatSession();
@@ -1001,6 +1063,13 @@ send.addEventListener("click", async () => {
         chatStatusText.textContent = data.message || "";
         chatSpinner.classList.add("active");
       }
+      if (event === "context_usage") {
+        const used = data.prompt_tokens || 0;
+        const max = data.context_length || 0;
+        const pct = max ? Math.round((used / max) * 100) : 0;
+        const fmt = (n) => n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : `${Math.round(n / 1000)}K`;
+        contextUsage.textContent = `${fmt(used)} / ${fmt(max)} (${pct}%)`;
+      }
       if (event === "token") {
         if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
         answer += data.text || "";
@@ -1008,7 +1077,9 @@ send.addEventListener("click", async () => {
         chatLog.scrollTop = chatLog.scrollHeight;
       }
       if (event === "tool_call") {
-        const toolMsg = `⚙ ${data.name}(${JSON.stringify(data.arguments)})`;
+        const label = TOOL_LABELS[data.name] || data.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        chatStatusText.textContent = `${label}...`;
+        const toolMsg = `\u2699 ${data.name}(${JSON.stringify(data.arguments)})`;
         const node = appendMessage({ role: "tool", content: toolMsg, created_at: new Date().toISOString() });
         node.bubble.classList.add("tool-call");
       }
@@ -1034,11 +1105,10 @@ send.addEventListener("click", async () => {
         chatSpinner.classList.remove("active");
         if (data.summary) {
           setStatus(data.summary, "ready");
-          if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
-          renderMessageContent(assistant.content, `✅ ${data.summary}`);
         } else {
           setStatus("Response saved.", "ready");
         }
+        renderMessages();
       }
     });
   } catch (error) {
@@ -1074,11 +1144,11 @@ draft.addEventListener("click", async () => {
 
 previewDraft.addEventListener("click", () => {
   if (activeDocumentDraftId) {
-    viewer.src = `/api/agent/document-drafts/${activeDocumentDraftId}/preview`;
+    viewer.src = yearParam(`/api/agent/document-drafts/${activeDocumentDraftId}/preview`);
     return;
   }
   if (!activeDraftId) return;
-  viewer.src = `/api/agent/drafts/${activeDraftId}/preview`;
+  viewer.src = yearParam(`/api/agent/drafts/${activeDraftId}/preview`);
 });
 
 applyDraft.addEventListener("click", async () => {
@@ -1117,8 +1187,7 @@ applyDraft.addEventListener("click", async () => {
 
 loadDocumentDraft.addEventListener("click", () => loadDocumentDraftById(documentDraftSelect.value).catch(showError));
 
-// loadCourseDraft is commented out in HTML; skip event listener
-// loadCourseDraft.addEventListener("click", () => loadCourseDraftById(courseDraftSelect.value).catch(showError));
+loadCourseDraft.addEventListener("click", () => loadCourseDraftById(courseDraftSelect.value).catch(showError));
 
 save.addEventListener("click", async () => {
   if (versionMode) return;

@@ -39,6 +39,53 @@ h1 {
   font-size: 1.5rem;
 }
 
+.year-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+}
+
+.year-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.year-bar input {
+  width: 110px;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.year-bar input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+#save-year {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 0.875rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+#save-year:hover {
+  border-color: var(--accent);
+}
+
+.year-status {
+  color: #16a34a;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
 .surface-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
