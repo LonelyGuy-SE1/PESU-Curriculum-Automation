@@ -11,11 +11,10 @@ from app.services.agent_tools import call_tool, list_tool_schemas
 from app.services.attachments import extract_text
 from app.services.curriculum import load_document_draft, refined_course
 from app.services.errors import database_http_exception
-from app.services.openrouter import OpenRouterError, stream_chat
+from app.services.openrouter import OpenRouterError, context_length, stream_chat
 from app.supabase import first_row, supabase
 
 router = APIRouter()
-MAX_ATTACHMENT_CONTEXT = 12000
 logger = logging.getLogger(__name__)
 
 
@@ -31,10 +30,9 @@ def load_chat_session(session_id: int) -> dict:
 
 def chat_messages(session_id: int) -> list[dict]:
     rows = supabase.table("chat_messages").select("*").eq("session_id", session_id).order("id").execute().data
-    last24 = rows[-24:]
 
     all_ids: list[int] = []
-    for row in last24:
+    for row in rows:
         for att in (row.get("metadata") or {}).get("attachments") or []:
             if isinstance(att, dict) and att.get("id"):
                 all_ids.append(int(att["id"]))
@@ -52,7 +50,7 @@ def chat_messages(session_id: int) -> list[dict]:
 
     if orphans:
         last_assistant = None
-        for row in reversed(last24):
+        for row in reversed(rows):
             if row.get("role") == "assistant":
                 last_assistant = row
                 break
@@ -67,7 +65,7 @@ def chat_messages(session_id: int) -> list[dict]:
             last_assistant["metadata"] = meta
 
     if not all_ids:
-        return last24
+        return rows
 
     att_rows = (
         supabase.table("chat_attachments")
@@ -79,7 +77,7 @@ def chat_messages(session_id: int) -> list[dict]:
     )
     att_map = {str(a["id"]): a for a in att_rows}
 
-    for row in last24:
+    for row in rows:
         meta = row.get("metadata") or {}
         enriched = []
         for att in meta.get("attachments") or []:
@@ -98,7 +96,7 @@ def chat_messages(session_id: int) -> list[dict]:
         meta["attachments"] = enriched
         row["metadata"] = meta
 
-    return last24
+    return rows
 
 
 def insert_chat_message(session_id: int, role: str, content: str, metadata: dict | None = None) -> dict:
@@ -134,7 +132,7 @@ def attachment_context(session_id: int, metadata: dict | None) -> str:
         status = row.get("status") or ""
         text = str(row.get("extracted_text") or "").strip()
         if text:
-            blocks.append(f"Attachment: {name}\n{text[:MAX_ATTACHMENT_CONTEXT]}")
+            blocks.append(f"Attachment: {name}\n{text}")
         else:
             error = row.get("error") or "No extracted text"
             blocks.append(f"Attachment: {name}\nStatus: {status}. {error}")
@@ -142,7 +140,7 @@ def attachment_context(session_id: int, metadata: dict | None) -> str:
 
 
 def stable_context(value: dict) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2)[:16000]
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2)
 
 
 def chat_system_prompt(session: dict) -> str:
@@ -194,7 +192,7 @@ Active context:
 {context or "No active course or document draft is selected."}"""
 
 
-def model_messages(session_id: int, rows: list[dict]) -> list[dict]:
+def model_messages(session_id: int, rows: list[dict]) -> tuple[list[dict], dict]:
     messages = []
     for row in rows:
         if row.get("role") not in {"user", "assistant"}:
@@ -206,10 +204,10 @@ def model_messages(session_id: int, rows: list[dict]) -> list[dict]:
         if content:
             messages.append({"role": row["role"], "content": content})
 
-    MAX_CONTENT_CHARS = 30000
+    budget = context_length() * 3
     total = sum(len(m["content"]) for m in messages)
-    if total > MAX_CONTENT_CHARS and len(messages) >= 2:
-        while total > MAX_CONTENT_CHARS and len(messages) >= 2:
+    if total > budget and len(messages) >= 2:
+        while total > budget and len(messages) >= 2:
             removed_user = messages.pop(0)
             total -= len(removed_user["content"])
             if messages:
@@ -219,7 +217,8 @@ def model_messages(session_id: int, rows: list[dict]) -> list[dict]:
             "role": "user",
             "content": "[Earlier conversation context has been truncated to manage token usage]"
         })
-    return messages
+    usage = {"total_chars": total, "budget_chars": budget, "message_count": len(messages), "context_length": context_length()}
+    return messages, usage
 
 
 def sse(event: str, data: dict) -> str:
@@ -323,14 +322,16 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
             return message
 
         try:
-            yield sse("status", {"message": "Message saved"})
+            yield sse("status", {"message": "Analyzing your request..."})
             rows = chat_messages(session_id)
-            yield sse("status", {"message": "Loading context"})
             system = chat_system_prompt(session)
-            yield sse("status", {"message": "Streaming response"})
-            for item in stream_chat(system, model_messages(session_id, rows), list_tool_schemas(), call_tool, remember_tool_result):
+            msgs, _ = model_messages(session_id, rows)
+            for item in stream_chat(system, msgs, list_tool_schemas(), call_tool, remember_tool_result):
                 if isinstance(item, dict) and "$status" in item:
                     yield sse("status", {"message": item["$status"]})
+                    continue
+                if isinstance(item, dict) and "$usage" in item:
+                    yield sse("context_usage", item["$usage"])
                     continue
                 if isinstance(item, dict) and "$event" in item:
                     event = item["$event"]

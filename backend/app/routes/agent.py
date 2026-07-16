@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from postgrest.exceptions import APIError
 
@@ -176,7 +176,7 @@ def get_agent_draft(draft_id: int):
 
 
 @router.get("/agent/drafts/{draft_id}/preview")
-def preview_agent_draft(draft_id: int, diff: bool = False):
+def preview_agent_draft(draft_id: int, diff: bool = False, curriculum_year: str | None = Query(None)):
     try:
         draft = load_agent_draft(draft_id)
     except LookupError as exc:
@@ -192,11 +192,11 @@ def preview_agent_draft(draft_id: int, diff: bool = False):
             base=base,
             proposed=proposed,
             course_diff=course_diff,
-            curriculum_year=selected_curriculum_year(),
+            curriculum_year=selected_curriculum_year(curriculum_year),
             asset_root="/",
         )
     else:
-        html = templates.get_template("jinja_sample.html").render(course=draft["proposed_json"], curriculum_year=selected_curriculum_year(), asset_root="/")
+        html = templates.get_template("jinja_sample.html").render(course=draft["proposed_json"], curriculum_year=selected_curriculum_year(curriculum_year), asset_root="/")
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
@@ -377,7 +377,7 @@ def get_agent_document_draft(document_draft_id: int):
 
 
 @router.get("/agent/document-drafts/{document_draft_id}/preview")
-def preview_agent_document_draft(document_draft_id: int, diff: bool = False):
+def preview_agent_document_draft(document_draft_id: int, diff: bool = False, curriculum_year: str | None = Query(None)):
     try:
         result = load_document_draft(document_draft_id)
     except LookupError as exc:
@@ -397,7 +397,7 @@ def preview_agent_document_draft(document_draft_id: int, diff: bool = False):
             course_diffs.append({"base": base, "proposed": proposed, "course_diff": course_diff})
         html = templates.get_template("jinja_diff.html").render(
             course_diffs=course_diffs,
-            curriculum_year=selected_curriculum_year(),
+            curriculum_year=selected_curriculum_year(curriculum_year),
             asset_root="/",
         )
     else:
@@ -405,13 +405,19 @@ def preview_agent_document_draft(document_draft_id: int, diff: bool = False):
             (draft["proposed_json"] for draft in drafts),
             key=lambda course: (int(course.get("semester") or 0), str(course.get("course_code") or ""), str(course.get("course_title") or "")),
         )
-        html = templates.get_template("jinja_sample.html").render(courses=courses, semester="", curriculum_year=selected_curriculum_year(), asset_root="/", show_summaries=True)
+        html = templates.get_template("jinja_sample.html").render(courses=courses, semester="", curriculum_year=selected_curriculum_year(curriculum_year), asset_root="/", show_summaries=True)
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/agent/tools")
 def get_agent_tools():
     return {"tools": list_tool_schemas()}
+
+
+@router.get("/agent/context-length")
+def get_context_length():
+    from app.services.openrouter import context_length, MODEL
+    return {"context_length": context_length(), "model": MODEL}
 
 
 @router.post("/agent/tools/{tool_name}")

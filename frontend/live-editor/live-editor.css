@@ -183,7 +183,7 @@ button:disabled {
   padding: 4px 12px;
   font-size: 12px;
   color: #6b7280;
-  border-bottom: 1px solid #e5e7eb;
+  border-top: 1px solid #e5e7eb;
   background: #fff;
   white-space: nowrap;
   overflow: hidden;
@@ -298,16 +298,17 @@ iframe {
 }
 
 .chat-panel {
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto 1fr auto auto;
 }
 
 .thread-bar {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto auto auto;
   gap: 8px;
   padding: 10px;
   border-bottom: 1px solid #d1d5db;
   background: #fff;
+  align-items: center;
 }
 
 .thread-selector {
@@ -348,6 +349,32 @@ iframe {
   background: #00377b;
   border-color: #00377b;
   color: #fff;
+}
+
+.context-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.context-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.context-usage {
+  font-size: 10px;
+  color: #9ca3af;
+  white-space: nowrap;
 }
 
 .chat-log {
@@ -491,6 +518,18 @@ iframe {
   font-size: 12px;
 }
 
+.message-body code a {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-family: inherit;
+  font-size: inherit;
+  color: #00377b;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
 .message-body blockquote {
   border-left: 3px solid #d1d5db;
   margin: 8px 0;
@@ -501,6 +540,11 @@ iframe {
 .message-body a {
   color: #00377b;
   text-decoration: underline;
+  display: inline;
+  word-break: break-all;
+  background: none;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .message-body strong {

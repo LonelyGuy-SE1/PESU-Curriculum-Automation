@@ -84,12 +84,16 @@
             <input id="chat-title" type="text" aria-label="Chat title" hidden />
             <button class="danger" id="delete-chat" type="button">Delete</button>
             <button id="new-chat" type="button">New</button>
+            <div class="context-info" id="context-info">
+              <span class="context-badge" id="context-badge" title="Model context window"></span>
+              <span class="context-usage" id="context-usage"></span>
+            </div>
           </div>
+          <div class="chat-log" id="chat-log" aria-live="polite"></div>
           <div class="chat-status" id="chat-status" role="status">
             <span class="spinner" id="chat-spinner" aria-hidden="true"></span>
             <span id="chat-status-text"></span>
           </div>
-          <div class="chat-log" id="chat-log" aria-live="polite"></div>
           <div class="composer">
             <div class="attachments" id="draft-attachments"></div>
             <textarea id="message" aria-label="Message"></textarea>
@@ -111,10 +115,10 @@
 
         <section class="panel review-panel" id="review-panel" role="tabpanel" aria-labelledby="review-tab">
           <div class="document-draft">
-            <!-- <div class="draft-loader">
+            <div class="draft-loader">
               <select id="course-draft-select" aria-label="Course draft"></select>
               <button id="load-course-draft" type="button" title="Load single‑course draft from agent">Load Course</button>
-            </div> -->
+            </div>
             <div class="draft-loader">
               <select id="document-draft-select" aria-label="Document draft"></select>
               <button id="load-document-draft" type="button" title="Load multi‑course document draft from agent">Load Document</button>
@@ -140,7 +144,7 @@
       </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
     <script src="live-editor.js" defer></script>
   </body>
