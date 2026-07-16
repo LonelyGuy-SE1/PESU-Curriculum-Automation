@@ -9,6 +9,8 @@ pinned: false
 
 # PESU Curriculum Automation
 
+<div align="center">
+
 ![Python](https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.138-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![Supabase](https://img.shields.io/badge/supabase-postgres-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
@@ -19,6 +21,9 @@ pinned: false
 ![Sentry](https://img.shields.io/badge/sentry--sdk-2.63-362D59?style=flat-square&logo=sentry&logoColor=white)
 ![HF Space](https://img.shields.io/badge/deploy-HF%20Spaces-yellow?style=flat-square&logo=huggingface&logoColor=white)
 ![Vercel](https://img.shields.io/badge/frontend-Vercel-black?style=flat-square&logo=vercel&logoColor=white)
+[![Docs](https://img.shields.io/badge/docs-Pages-blue?style=flat-square&logo=github&logoColor=white)](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/)
+
+</div>
 
 Automate PES University's B.Tech curriculum management: faculty submit raw course content, the system refines it via AI, and admins review, edit, and export the full curriculum as official A4 PDFs.
 
@@ -61,7 +66,7 @@ flowchart LR
 - **Course submission** with auto-parsed course codes (semester, department, credits extracted automatically)
 - **AI refinement** that preserves all syllabus topics, only cleans and structures content
 - **Full curriculum PDFs** in PES University's official A4 format with letterhead
-- **Live editor** with AI assistant (SSE streaming, 32 tools, draft review)
+- **Live editor** with AI assistant (SSE streaming, 33 tools, draft review)
 - **Reviewable drafts** (agent never auto-applies changes)
 - **Dynamic specialization management** (DB-driven tracks, not hardcoded)
 - **Version snapshots** with restore and revision history
@@ -78,6 +83,22 @@ cd backend && fastapi dev app/main.py
 ```
 
 Server at `http://127.0.0.1:8000`. API under `/api`. Frontend served from `frontend/`.
+
+## Agent Tools
+
+The live editor includes an AI assistant with 33 tools for reading, writing, and managing curriculum data:
+
+| Category | Tools | Description |
+|---|---|---|
+| Read | `get_curriculum_json`, `get_course_syllabus`, `get_course_textbooks`, `get_course_fields`, `batch_read_courses`, `list_courses` | Browse courses, read specific fields, load full curriculum |
+| Write | `create_refined_course` | Create new courses directly in the refined database |
+| Draft | `create_course_draft`, `create_document_draft`, `get_course_draft`, `get_document_draft` | Propose changes for human review before applying |
+| Report | `create_report`, `create_spreadsheet`, `diff_course_json` | Generate CSV/Excel exports, markdown reports, field diffs |
+| Web | `fetch_url`, `web_search` | Fetch public URLs, search the web for current information |
+| Specialization | `define_specialization`, `assign_elective_to_tracks`, `list_specializations` | Manage elective tracks and categorization |
+| Version | `create_curriculum_version`, `get_version`, `diff_versions` | Snapshot, restore, and compare curriculum versions |
+
+Full tool schemas and documentation: [PESU Curriculum Docs](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/)
 
 ## Documentation
 

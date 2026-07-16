@@ -12,7 +12,7 @@ router = APIRouter()
 @router.get("/courses")
 def list_courses():
     try:
-        rows = supabase.table("refined_submissions").select("*").neq("status", "archived").execute().data
+        rows = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).execute().data
         rows = attach_submissions(rows)
     except APIError as exc:
         raise database_http_exception(exc) from exc

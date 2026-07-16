@@ -223,7 +223,7 @@ def preview_version(version_id: int, diff: bool = Query(False), curriculum_year:
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     # Diff mode: compare version against current refined submissions
-    current_rows = supabase.table("refined_submissions").select("*").neq("status", "archived").execute().data
+    current_rows = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).execute().data
     current_rows = attach_submissions(current_rows)
     current = {row["id"]: build_course_preview(row) for row in current_rows}
 

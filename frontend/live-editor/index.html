@@ -26,6 +26,7 @@
           <option value="document">Full Document</option>
         </select>
         <button id="preview" type="button">Open</button>
+        <span id="version-display" class="version-display" hidden></span>
       </div>
 
       <div class="toolbar-group version-controls">
@@ -101,6 +102,7 @@
               <button id="attach" type="button">Attach</button>
               <input id="files" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.png,.jpg,.jpeg" hidden />
               <button class="primary" id="send" type="button">Send</button>
+              <button id="stop-btn" type="button" class="stop-btn" hidden>Stop</button>
             </div>
           </div>
         </section>
@@ -115,6 +117,10 @@
 
         <section class="panel review-panel" id="review-panel" role="tabpanel" aria-labelledby="review-tab">
           <div class="document-draft">
+            <div class="draft-loader">
+              <select id="pending-course-select" aria-label="Pending new course"></select>
+              <button id="load-pending-course" type="button" title="Load pending draft course created by agent">Load Pending</button>
+            </div>
             <div class="draft-loader">
               <select id="course-draft-select" aria-label="Course draft"></select>
               <button id="load-course-draft" type="button" title="Load single‑course draft from agent">Load Course</button>

@@ -4,6 +4,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   height: 100dvh;
@@ -710,9 +714,36 @@ iframe {
 
 .composer-actions {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   gap: 8px;
   align-items: center;
+}
+
+.stop-btn {
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0 12px;
+  height: 28px;
+  font: 13px/1 Arial, sans-serif;
+  cursor: pointer;
+}
+
+.stop-btn:hover {
+  background: #b91c1c;
+}
+
+.version-display {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font: 12px/1 Arial, sans-serif;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 .fields-panel {

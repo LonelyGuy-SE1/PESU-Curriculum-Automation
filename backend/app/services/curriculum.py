@@ -112,7 +112,7 @@ def elective_order(code: str, first_group: str, second_group: str) -> int | None
 
 
 def create_version_snapshot(name: str) -> dict:
-    rows = supabase.table("refined_submissions").select("*").execute().data
+    rows = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).execute().data
     rows = attach_submissions(rows)
     courses = [{"refined_id": row["id"], "course_json": build_course_preview(row)} for row in rows]
     program = courses[0]["course_json"].get("program") if courses else ""
@@ -145,6 +145,9 @@ def update_refined_fields(refined_id: int, fields: dict) -> dict | None:
     for key in ("semester", "lecture_hours", "tutorial_hours", "practical_hours", "self_study", "credits"):
         if key in update:
             update[key] = int(update[key] or 0)
+    row = first_row(supabase.table("refined_submissions").select("status").eq("id", refined_id))
+    if row and row.get("status") == "draft":
+        update["status"] = "refined"
     result = supabase.table("refined_submissions").update(update).eq("id", refined_id).execute()
     return result.data[0] if result.data else None
 

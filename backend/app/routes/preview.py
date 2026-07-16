@@ -12,13 +12,19 @@ router = APIRouter()
 
 @router.get("/preview/semester/{sem}/courses")
 def list_courses(sem: int):
-    result = supabase.table("refined_submissions").select("id").neq("status", "archived").eq("visible", True).eq("semester", sem).order("id").execute()
+    result = supabase.table("refined_submissions").select("id,status").in_("status", ["refined"]).eq("visible", True).eq("semester", sem).order("id").execute()
     return {"course_ids": [row["id"] for row in result.data]}
+
+
+@router.get("/preview/pending-courses")
+def list_pending_courses():
+    result = supabase.table("refined_submissions").select("id,course_code,course_title").eq("status", "draft").eq("visible", True).order("id").execute()
+    return {"courses": [{"id": row["id"], "course_code": row.get("course_code") or "", "course_title": row.get("course_title") or ""} for row in result.data]}
 
 
 @router.get("/preview/courses")
 def list_all_courses():
-    result = supabase.table("refined_submissions").select("id,semester,course_code").neq("status", "archived").eq("visible", True).execute()
+    result = supabase.table("refined_submissions").select("id,semester,course_code").in_("status", ["refined"]).eq("visible", True).execute()
     rows = sorted(result.data, key=lambda row: (int(row.get("semester") or 0), str(row.get("course_code") or ""), int(row.get("id") or 0)))
     return {"course_ids": [row["id"] for row in rows]}
 
@@ -39,7 +45,7 @@ def preview_course(refined_id: int, curriculum_year: str | None = Query(None)):
 
 @router.get("/preview/html")
 def preview_all_html(curriculum_year: str | None = Query(None)):
-    result = supabase.table("refined_submissions").select("*").neq("status", "archived").eq("visible", True).execute()
+    result = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).eq("visible", True).execute()
     courses = ordered_courses(result.data)
     html = templates.get_template("jinja_sample.html").render(
         courses=courses,
@@ -54,7 +60,7 @@ def preview_all_html(curriculum_year: str | None = Query(None)):
 
 @router.get("/preview/pdf")
 def download_all_pdf(download: bool = Query(False), curriculum_year: str | None = Query(None)):
-    result = supabase.table("refined_submissions").select("*").neq("status", "archived").eq("visible", True).execute()
+    result = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).eq("visible", True).execute()
     courses = ordered_courses(result.data)
     html = templates.get_template("jinja_sample.html").render(
         courses=courses,
@@ -70,7 +76,7 @@ def download_all_pdf(download: bool = Query(False), curriculum_year: str | None 
 
 @router.get("/preview/semester/{sem}/pdf")
 def download_pdf(sem: int, download: bool = Query(False), curriculum_year: str | None = Query(None)):
-    result = supabase.table("refined_submissions").select("*").neq("status", "archived").eq("visible", True).eq("semester", sem).order("id").execute()
+    result = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).eq("visible", True).eq("semester", sem).order("id").execute()
     courses = ordered_courses(result.data)
     html = templates.get_template("jinja_sample.html").render(
         courses=courses,

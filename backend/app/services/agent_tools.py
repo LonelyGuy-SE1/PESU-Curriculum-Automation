@@ -211,17 +211,100 @@ def _diff_course_json(arguments: dict) -> dict:
 
 
 def _create_course_draft(arguments: dict) -> dict:
-    record = draft_record(
-        _require_int(arguments, "refined_id"),
-        _require_dict(arguments, "fields"),
-        str(arguments.get("reason") or ""),
-    )
+    refined_id = _require_int(arguments, "refined_id")
+    if refined_id <= 0:
+        raise ValueError("refined_id must be a valid existing course ID. To create a brand-new course, use create_refined_course instead.")
+    fields = arguments.get("fields")
+    if not isinstance(fields, dict) or not fields:
+        raise ValueError("fields must be a non-empty object containing only the fields to change, e.g. {\"text_books\": \"new value\"}. Do not pass all course data; only pass what should change.")
+    record = draft_record(refined_id, fields, str(arguments.get("reason") or ""))
     draft = supabase.table("agent_drafts").insert(record).execute().data[0]
     return {"draft": draft}
 
 
+_ARRAY_FIELDS = {"course_outcomes", "lab_experiments", "objectives", "text_books", "reference_books", "units"}
+
+
+def _coerce_array(value):
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith("["):
+            try:
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+        return [stripped] if stripped else []
+    return [value] if value is not None else []
+
+
+def _create_refined_course(arguments: dict) -> dict:
+    from app.services.deterministic import compute_course_type, compute_hours, compute_program
+
+    credit_category = str(arguments.get("credit_category") or "4")
+    target_dept = str(arguments.get("target_department") or "CSE")
+    det = compute_hours(credit_category)
+
+    computed = {
+        "program": compute_program(target_dept),
+        "course_type": compute_course_type(credit_category),
+        "status": "draft",
+    }
+    for key in ("lecture_hours", "tutorial_hours", "practical_hours", "self_study", "credits"):
+        if key in arguments:
+            computed[key] = int(arguments[key] or 0)
+        else:
+            computed[key] = det[key]
+    if "semester" in arguments:
+        computed["semester"] = int(arguments["semester"] or 0)
+
+    fields = {k: v for k, v in arguments.items() if v is not None and k in REFINED_FIELDS}
+    for key in _ARRAY_FIELDS:
+        if key in fields:
+            fields[key] = _coerce_array(fields[key])
+    fields.update(computed)
+
+    refined_id = arguments.get("refined_id")
+    if refined_id:
+        result = supabase.table("refined_submissions").update(fields).eq("id", int(refined_id)).execute()
+        row = result.data[0] if result.data else None
+        return {"refined_id": int(refined_id), "updated": True, "course": row}
+
+    if "submission_id" not in fields or not fields.get("submission_id"):
+        placeholder = supabase.table("submissions").insert({
+            "faculty_email": "ai-generated@pesu.pes.edu",
+            "course_title": fields.get("course_title") or "",
+            "offering_department": "CS",
+            "target_department": arguments.get("target_department") or "CSE",
+            "semester": int(arguments.get("semester") or 1),
+            "credit_category": arguments.get("credit_category") or "4",
+            "raw_course_content": fields.get("prelude") or "AI-created course",
+            "text_books": "",
+            "reference_books": "",
+            "preferred_tools": "",
+            "status": "refined",
+        }).execute().data[0]
+        fields["submission_id"] = placeholder["id"]
+
+    result = supabase.table("refined_submissions").insert(fields).execute()
+    row = result.data[0]
+    return {"refined_id": row["id"], "updated": False, "course": row}
+
+
+REFINED_FIELDS = {
+    "semester", "course_code", "course_title", "program",
+    "lecture_hours", "tutorial_hours", "practical_hours", "self_study",
+    "credits", "course_type", "tools_languages", "desirable_knowledge",
+    "prelude", "objectives", "course_outcomes", "units", "lab_experiments",
+    "text_books", "reference_books", "status",
+}
+
+
 def _get_curriculum_json(arguments: dict) -> dict:
-    query = supabase.table("refined_submissions").select("*").neq("status", "archived")
+    query = supabase.table("refined_submissions").select("*").in_("status", ["refined"])
     if arguments.get("semester") is not None:
         query = query.eq("semester", int(arguments["semester"]))
     return {"courses": ordered_courses(query.execute().data)}
@@ -735,7 +818,7 @@ def _diff_versions(arguments: dict) -> dict:
 
 def _get_curriculum_stats(arguments: dict) -> dict:
     """Compute aggregate statistics for the curriculum or a specific semester."""
-    query = supabase.table("refined_submissions").select("semester,credits,course_type,credit_category,lecture_hours,practical_hours,visible,is_elective").neq("status", "archived")
+    query = supabase.table("refined_submissions").select("semester,credits,course_type,credit_category,lecture_hours,practical_hours,visible,is_elective").in_("status", ["refined"])
     if arguments.get("semester") is not None:
         query = query.eq("semester", int(arguments["semester"]))
     rows = query.execute().data
@@ -865,6 +948,45 @@ TOOLS: dict[str, AgentTool] = {
             "required": ["refined_id", "fields"],
         },
         _create_course_draft,
+    ),
+    "create_refined_course": AgentTool(
+        "create_refined_course",
+        "Create a new course directly in refined_submissions, or update an existing one by refined_id. Use this ONLY for brand-new courses that do not exist in the curriculum yet. For modifications to existing courses, use create_course_draft instead. Call signal_done immediately after this tool. Do not retry if this tool returns an error; report the error to the user instead.",
+        {
+            **OBJECT,
+            "properties": {
+                "refined_id": {"type": "integer", "description": "If provided, update this existing course. If omitted, create a new one."},
+                "course_code": {"type": "string", "description": "e.g. UE25CS353A"},
+                "course_title": {"type": "string"},
+                "semester": {"type": "integer", "minimum": 1, "maximum": 8},
+                "target_department": {"type": "string", "description": "CSE, ECE, ME, BT, EEE, AIML"},
+                "credit_category": {"type": "string", "description": "0, 2, 4, or 5"},
+                "units": {
+                "type": "array",
+                "description": "Course units. Each unit must have unit_number (int), title (str), content (str, the syllabus text), and hours (int).",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "unit_number": {"type": "integer"},
+                        "title": {"type": "string"},
+                        "content": {"type": "string"},
+                        "hours": {"type": "integer"},
+                    },
+                    "required": ["unit_number", "title", "content", "hours"],
+                },
+            },
+                "objectives": {"type": "string"},
+                "course_outcomes": {"type": "string"},
+                "text_books": {"type": "string"},
+                "reference_books": {"type": "string"},
+                "lab_experiments": {"type": "string"},
+                "tools_languages": {"type": "string"},
+                "prelude": {"type": "string"},
+                "desirable_knowledge": {"type": "string"},
+            },
+            "required": ["course_code", "course_title", "semester", "target_department", "credit_category"],
+        },
+        _create_refined_course,
     ),
     "get_curriculum_json": AgentTool(
         "get_curriculum_json",
