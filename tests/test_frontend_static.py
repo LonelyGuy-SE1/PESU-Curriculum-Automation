@@ -118,7 +118,7 @@ def test_frontend_routes_mount(monkeypatch):
         "/form/": "Course Submission",
         "/courses/": "Course Management",
         "/preview/": "Curriculum Preview",
-        "/live-editor/": "Live Editor",
+        "/live-editor/": "Agentic Editor",
         "/versions/": "Curriculum Versions",
     }
 

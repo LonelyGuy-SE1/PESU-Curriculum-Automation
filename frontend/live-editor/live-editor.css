@@ -15,7 +15,6 @@ body {
   grid-template-rows: auto 1fr;
   background: var(--page-bg);
   color: var(--foreground);
-  font-family: inherit;
   overflow: hidden;
 }
 
@@ -59,13 +58,15 @@ select {
   min-width: 150px;
   background-color: var(--surface);
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' fill='none' stroke='%2371717a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 14px;
-  padding-right: 28px;
+  background-position: right 10px center;
+  background-size: 12px;
+  padding: 0 32px 0 10px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: border-color 0.15s;
+  font-weight: 500;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 select:hover {
@@ -115,6 +116,9 @@ a {
   padding: 0 12px;
   text-decoration: none;
   cursor: pointer;
+  border-radius: 10px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 button:disabled {
@@ -235,9 +239,10 @@ button:disabled {
 .side-pane {
   min-height: 0;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border-radius: 12px;
   background: #fff;
   overflow: hidden;
+  box-shadow: var(--shadow-md);
 }
 
 .preview-pane {
@@ -337,11 +342,12 @@ iframe {
   height: 34px;
   padding: 0;
   border: 1px solid #9ca3af;
-  border-radius: 4px;
+  border-radius: 10px;
   background: #fff;
   cursor: pointer;
   color: #6b7280;
   flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
 }
 
 .icon-btn:hover {
@@ -703,7 +709,7 @@ iframe {
   border: 1px solid #d1d5db;
   border-radius: 4px;
   color: #111827;
-  font: 13px/1.45 Arial, sans-serif;
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 .composer textarea {
@@ -726,7 +732,7 @@ iframe {
   border-radius: 4px;
   padding: 0 12px;
   height: 28px;
-  font: 13px/1 Arial, sans-serif;
+  font: 13px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
   cursor: pointer;
 }
 
@@ -738,7 +744,7 @@ iframe {
   display: inline-flex;
   align-items: center;
   padding: 0 8px;
-  font: 12px/1 Arial, sans-serif;
+  font: 12px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
   color: #6b7280;
   white-space: nowrap;
   overflow: hidden;

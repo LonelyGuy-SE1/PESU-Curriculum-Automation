@@ -19,7 +19,7 @@
         </div>
         <div class="actions">
           <a class="button-link" href="../form/">Add Course</a>
-          <a class="button-link" href="../live-editor/">Live Editor</a>
+          <a class="button-link" href="../live-editor/">Agentic Editor</a>
         </div>
       </header>
 
@@ -41,12 +41,20 @@
             <option value="visible">Visible only</option>
             <option value="hidden">Hidden only</option>
           </select>
-          <input id="search" type="search" aria-label="Search courses" />
+          <input id="search" type="search" placeholder="Search courses..." aria-label="Search courses" />
           <span class="status-line" id="status" role="status"></span>
         </div>
 
         <div class="table-wrap">
           <table>
+            <colgroup>
+              <col style="width:80px" />
+              <col style="width:130px" />
+              <col />
+              <col style="width:70px" />
+              <col style="width:70px" />
+              <col style="width:90px" />
+            </colgroup>
             <thead>
               <tr>
                 <th>Semester</th>

@@ -50,9 +50,43 @@ def list_versions():
         return {"versions": cached}
     try:
         rows = supabase.table("curriculum_versions").select("*").order("id", desc=True).execute().data
+        version_ids = [row["id"] for row in rows]
+        if version_ids:
+            fs_rows = (
+                supabase.table("finalized_submissions")
+                .select("curriculum_version_id,refined_id,course_json")
+                .in_("curriculum_version_id", version_ids)
+                .execute()
+                .data
+            )
+            count_map: dict[int, int] = {}
+            version_courses: dict[int, dict[int, dict]] = {}
+            for c in fs_rows:
+                vid = c["curriculum_version_id"]
+                count_map[vid] = count_map.get(vid, 0) + 1
+                version_courses.setdefault(vid, {})[c["refined_id"]] = c.get("course_json") or {}
+            for row in rows:
+                row["course_count"] = count_map.get(row["id"], 0)
+            current_rows = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).execute().data
+            current_rows = attach_submissions(current_rows)
+            current_map = {row["id"]: build_course_preview(row) for row in current_rows}
+            for row in rows:
+                vid = row["id"]
+                v_courses = version_courses.get(vid, {})
+                has_changes = False
+                for rid, v_json in v_courses.items():
+                    c_json = current_map.get(rid, {})
+                    if v_json != c_json:
+                        has_changes = True
+                        break
+                row["has_changes"] = has_changes
+        else:
+            for row in rows:
+                row["course_count"] = 0
+                row["has_changes"] = False
     except APIError as exc:
         raise database_http_exception(exc) from exc
-    cache.put("versions_list", rows, ttl=30)
+    cache.put("versions_list", rows, ttl=300)
     return {"versions": rows}
 
 
@@ -61,7 +95,20 @@ def update_version(version_id: int, payload: dict):
     _version(version_id)
     updates = {}
     if "name" in payload:
-        updates["name"] = str(payload["name"]).strip()
+        new_name = str(payload["name"]).strip()
+        if new_name:
+            existing = (
+                supabase.table("curriculum_versions")
+                .select("id")
+                .eq("name", new_name)
+                .neq("id", version_id)
+                .limit(1)
+                .execute()
+                .data
+            )
+            if existing:
+                raise HTTPException(status_code=400, detail="A version with this name already exists")
+            updates["name"] = new_name
     if "academic_year" in payload:
         updates["academic_year"] = str(payload["academic_year"]).strip()
     if "status" in payload:
@@ -83,9 +130,43 @@ def create_version(payload: dict):
         raise HTTPException(status_code=400, detail="Version name is required")
 
     try:
+        existing = (
+            supabase.table("curriculum_versions")
+            .select("id")
+            .eq("name", name)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            raise HTTPException(status_code=400, detail="A version with this name already exists")
+
         rows = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).execute().data
         rows = attach_submissions(rows)
         courses = [{"refined_id": row["id"], "course_json": build_course_preview(row)} for row in rows]
+
+        latest = (
+            supabase.table("curriculum_versions")
+            .select("id")
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if latest:
+            prev_fs = (
+                supabase.table("finalized_submissions")
+                .select("refined_id,course_json")
+                .eq("curriculum_version_id", latest[0]["id"])
+                .execute()
+                .data
+            )
+            prev_map = {c["refined_id"]: c.get("course_json") or {} for c in prev_fs}
+            if prev_map and all(
+                prev_map.get(c["refined_id"]) == c["course_json"] for c in courses
+            ):
+                raise HTTPException(status_code=409, detail="No changes since last version")
+
         version = (
             supabase.table("curriculum_versions")
             .insert(
@@ -119,6 +200,8 @@ def restore_version(version_id: int):
             .execute()
             .data
         )
+        if not rows:
+            raise HTTPException(status_code=400, detail="This version has no saved courses. Restore aborted.")
         version_refined_ids = [row["refined_id"] for row in rows]
         current_rows = supabase.table("refined_submissions").select("*").execute().data
         current = {row["id"]: build_course_preview(row) for row in attach_submissions(current_rows)}
@@ -261,6 +344,8 @@ def preview_version(version_id: int, diff: bool = Query(False), curriculum_year:
         if current_course:
             base = dict(current_course)
             proposed = dict(v_course)
+            if base == proposed:
+                continue
             course_diff = build_course_diff(base, proposed)
             if any(v is not None for v in course_diff.values()):
                 course_diffs.append({"base": base, "proposed": proposed, "course_diff": course_diff})

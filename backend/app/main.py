@@ -41,9 +41,39 @@ def frontend_directory():
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.routes.preview import preload_pdfs
     preload_pdfs()
+    _prewarm_cache()
     yield
     from app import cache
     cache.close()
+
+
+def _prewarm_cache():
+    """Warm frequently-read caches at startup to avoid cold-start latency."""
+    import logging
+    import threading
+
+    logger = logging.getLogger(__name__)
+
+    def _worker():
+        try:
+            from app import cache
+            from app.supabase import supabase
+
+            rows = supabase.table("refined_submissions").select("id,status,semester").in_("status", ["refined"]).eq("visible", True).order("id").execute().data
+            ids = [row["id"] for row in rows]
+            semesters: dict[int, list[int]] = {}
+            for row in rows:
+                sem = row.get("semester")
+                if sem is not None:
+                    semesters.setdefault(int(sem), []).append(row["id"])
+            cache.put("all_course_ids", ids, ttl=300)
+            for sem, sem_ids in semesters.items():
+                cache.put(f"sem_courses:{sem}", sem_ids, ttl=300)
+            logger.info("Cache prewarm complete: %d courses across %d semesters", len(ids), len(semesters))
+        except Exception:
+            logger.debug("Cache prewarm failed", exc_info=True)
+
+    threading.Thread(target=_worker, daemon=True, name="cache-prewarm").start()
 
 
 app = FastAPI(title="PESU Curriculum Automation", lifespan=lifespan)

@@ -9,6 +9,7 @@ const sidebarOverlay = document.getElementById("sidebar-overlay");
 const mobileMenuBtn = document.getElementById("mobile-menu");
 const collapseAllBtn = document.getElementById("collapse-all");
 const expandAllBtn = document.getElementById("expand-all");
+const showEmptyToggle = document.getElementById("show-empty");
 
 function setStatus(text, kind = "") {
   statusText.textContent = text || "";
@@ -47,7 +48,7 @@ function renderVersionTree(groups) {
   if (!groups.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "No snapshots saved. Create one from the Live Editor.";
+    empty.textContent = "No snapshots saved. Create one from the Agentic Editor.";
     versionList.appendChild(empty);
     return;
   }
@@ -78,7 +79,16 @@ function renderVersionTree(groups) {
     count.className = "version-count";
     count.textContent = String(versions.length);
 
-    header.append(expandIcon, folderIcon, label, count);
+    const groupEditBtn = document.createElement("button");
+    groupEditBtn.className = "icon-btn group-edit-btn";
+    groupEditBtn.title = "Rename category";
+    groupEditBtn.innerHTML = icon("edit");
+    groupEditBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startGroupEdit(year, versions, label, groupEditBtn);
+    });
+
+    header.append(expandIcon, folderIcon, label, count, groupEditBtn);
 
     const toggleGroup = () => {
       const collapsed = group.classList.toggle("collapsed");
@@ -199,17 +209,75 @@ async function saveEdit(versionId, name, academicYear, formEl) {
   }
 }
 
+function startGroupEdit(year, versions, labelEl, btnEl) {
+  if (labelEl.querySelector("input")) return;
+  const prevText = labelEl.textContent;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = year;
+  input.maxLength = 50;
+  input.style.cssText = "width:100%;height:24px;font:inherit;font-size:12px;padding:0 4px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--background);color:var(--foreground);outline:none;";
+  labelEl.textContent = "";
+  labelEl.appendChild(input);
+  input.focus();
+  input.select();
+
+  const finish = async (save) => {
+    const newVal = input.value.trim();
+    input.remove();
+    if (!save || newVal === year || !newVal) {
+      labelEl.textContent = prevText;
+      return;
+    }
+    const ids = versions.map((v) => v.id);
+    try {
+      for (const id of ids) {
+        const res = await fetch(`/api/versions/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ academic_year: newVal }),
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || "Update failed");
+      }
+      setStatus("Category renamed.", "ready");
+      await loadVersions();
+    } catch (e) {
+      setStatus(e.message, "error");
+      labelEl.textContent = prevText;
+    }
+  };
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") finish(true);
+    if (e.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true));
+}
+
+let allVersions = [];
+
 async function loadVersions() {
   setStatus("Loading versions...");
   try {
     const res = await fetch("/api/versions");
     if (!res.ok) throw new Error("Failed to load versions");
     const body = await res.json();
-    const groups = groupVersions(body.versions || []);
-    renderVersionTree(groups);
-    setStatus(body.versions?.length ? "Select a version to preview diff." : "No snapshots saved.");
+    allVersions = body.versions || [];
+    renderFilteredVersions();
   } catch (e) {
     setStatus(e.message, "error");
+  }
+}
+
+function renderFilteredVersions() {
+  const showEmpty = showEmptyToggle && showEmptyToggle.checked;
+  const filtered = showEmpty ? allVersions : allVersions.filter((v) => (v.course_count || 0) > 0 && v.has_changes !== false);
+  const groups = groupVersions(filtered);
+  renderVersionTree(groups);
+  if (!filtered.length) {
+    setStatus(allVersions.length ? "No versions with changes." : "No snapshots saved.", "ready");
+  } else {
+    setStatus("Select a version to preview diff.", "ready");
   }
 }
 
@@ -281,6 +349,8 @@ if (expandAllBtn) expandAllBtn.addEventListener("click", () => {
   versionList.querySelectorAll(".tree-group").forEach((g) => g.classList.remove("collapsed"));
   versionList.querySelectorAll(".tree-group-header").forEach((h) => h.setAttribute("aria-expanded", "true"));
 });
+
+if (showEmptyToggle) showEmptyToggle.addEventListener("change", renderFilteredVersions);
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && sidebar.classList.contains("open")) closeSidebar();

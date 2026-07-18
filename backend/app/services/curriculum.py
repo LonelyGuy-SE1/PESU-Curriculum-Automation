@@ -14,6 +14,11 @@ def invalidate_curriculum_cache():
     cache.invalidate("full_html:")
     cache.invalidate("sem_pdf:")
     cache.invalidate("course:")
+    cache.invalidate("course_html:")
+    cache.invalidate("sem_courses:")
+    cache.invalidate("pending_courses")
+    cache.invalidate("all_course_ids")
+    cache.invalidate("ver_preview:")
 SOURCE_ORDER = {
     "UE25CS151A": 1,
     "UE25CS151B": 1,
@@ -86,7 +91,7 @@ def attach_submissions(rows: list[dict]) -> list[dict]:
         return rows
     submissions = supabase.table("submissions").select("*").in_("id", ids).execute().data
     by_id = {row["id"]: row for row in submissions}
-    cache.put(cache_key, by_id, ttl=30)
+    cache.put(cache_key, by_id, ttl=300)
     for row in rows:
         row["_submission"] = by_id.get(row.get("submission_id"), {})
     return rows
@@ -158,7 +163,7 @@ def refined_course(refined_id: int) -> dict:
     if not row:
         raise LookupError("Refined submission not found")
     result = build_course_preview(attach_submissions([row])[0])
-    cache.put(cache_key, result, ttl=30)
+    cache.put(cache_key, result, ttl=300)
     return result
 
 

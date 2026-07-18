@@ -22,7 +22,7 @@ def list_courses():
         raise database_http_exception(exc) from exc
     courses = [build_course_preview(row) | {"id": row["id"], "visible": row.get("visible", True)} for row in rows]
     courses.sort(key=lambda item: (int(item.get("semester") or 0), item.get("course_code") or "", item.get("course_title") or ""))
-    cache.put("courses_list", courses, ttl=30)
+    cache.put("courses_list", courses, ttl=300)
     return {"courses": courses}
 
 
@@ -39,6 +39,9 @@ def set_visibility(refined_id: int, body: dict):
     except APIError as exc:
         raise database_http_exception(exc) from exc
     cache.invalidate("courses_list")
+    cache.invalidate("sem_courses:")
+    cache.invalidate("pending_courses")
+    cache.invalidate("all_course_ids")
     invalidate_curriculum_cache()
     return {"message": "Visibility updated", "course": result.data[0] if result.data else None}
 
@@ -53,5 +56,8 @@ def delete_course(refined_id: int):
     except APIError as exc:
         raise database_http_exception(exc) from exc
     cache.invalidate("courses_list")
+    cache.invalidate("sem_courses:")
+    cache.invalidate("pending_courses")
+    cache.invalidate("all_course_ids")
     invalidate_curriculum_cache()
     return {"message": "Course removed", "course": result.data[0] if result.data else None}

@@ -11,7 +11,10 @@ supabase = create_client(
     supabase_url=url,
     supabase_key=key,
     options=ClientOptions(
-        httpx_client=httpx.Client(http2=False),
+        httpx_client=httpx.Client(
+            http2=False,
+            timeout=httpx.Timeout(connect=10, read=30, write=10, pool=10),
+        ),
     ),
 )
 

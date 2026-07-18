@@ -21,7 +21,12 @@ def test_invalidate_curriculum_cache_clears_all_prefixes():
     assert "full_html:" in invalidated
     assert "sem_pdf:" in invalidated
     assert "course:" in invalidated
-    assert len(invalidated) == 4
+    assert "course_html:" in invalidated
+    assert "sem_courses:" in invalidated
+    assert "pending_courses" in invalidated
+    assert "all_course_ids" in invalidated
+    assert "ver_preview:" in invalidated
+    assert len(invalidated) == 9
 
 
 def test_invalidate_curriculum_cache_is_idempotent():

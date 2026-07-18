@@ -20,16 +20,19 @@
         <option value="7">Semester 7</option>
         <option value="8">Semester 8</option>
       </select>
+      <select id="course" aria-label="Course" hidden></select>
       <input id="curriculum-year" type="text" inputmode="numeric" aria-label="Academic Year" hidden />
       <a class="button-link" id="open" rel="noreferrer">Open PDF</a>
       <a class="button-link" id="download">Download PDF</a>
       <span class="status-line" id="status" role="status"></span>
     </div>
-    <div class="loading" id="loading" hidden>
-      <div class="spinner"></div>
-      <span>Loading curriculum...</span>
+    <div class="viewer-wrap">
+      <div class="loading" id="loading" hidden>
+        <div class="spinner"></div>
+        <span>Loading curriculum...</span>
+      </div>
+      <iframe id="viewer" title="Curriculum Preview"></iframe>
     </div>
-    <iframe id="viewer" title="Curriculum Preview"></iframe>
 
     <script src="/shared/auth-guard.js"></script>
     <script src="preview.js" defer></script>

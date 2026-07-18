@@ -106,6 +106,7 @@ th {
 
 td.center {
   text-align: center;
+  vertical-align: middle;
 }
 
 .hidden-row {
@@ -119,27 +120,31 @@ td.center {
 td.center input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 28px;
-  height: 16px;
-  border-radius: 8px;
+  width: 36px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
   border: 1.5px solid var(--border);
+  border-radius: 10px;
   background: var(--muted);
   position: relative;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   vertical-align: middle;
+  outline: none;
 }
 
 td.center input[type="checkbox"]::before {
   content: "";
   position: absolute;
-  top: 1.5px;
-  left: 1.5px;
-  width: 12px;
-  height: 12px;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--muted-foreground);
   transition: transform 0.15s, background 0.15s;
+  pointer-events: none;
 }
 
 td.center input[type="checkbox"]:checked {
@@ -148,8 +153,13 @@ td.center input[type="checkbox"]:checked {
 }
 
 td.center input[type="checkbox"]:checked::before {
-  transform: translateX(12px);
+  transform: translateX(16px);
   background: white;
+}
+
+td.center input[type="checkbox"]:focus {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .details {

@@ -129,7 +129,7 @@ def test_shared_css_has_inter_font():
     import re
 
     css = Path("frontend/shared.css").read_text()
-    assert "Inter" in css
+    assert "Outfit" in css
     urls = re.findall(r"url\(\s*['\"]?([^'\"\)]+)['\"]?\s*\)", css)
     assert any(urlparse(u).hostname == "fonts.googleapis.com" for u in urls)
 

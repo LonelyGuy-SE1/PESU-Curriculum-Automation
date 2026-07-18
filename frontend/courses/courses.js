@@ -106,19 +106,22 @@ function render() {
 
 async function setVisibility(course, toggle) {
   const next = toggle.checked;
-  setStatus("Updating visibility...");
-  const response = await fetch(`/api/courses/${course.id}/visible`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ visible: next }),
-  });
-  if (!response.ok) {
-    toggle.checked = !next;
-    setStatus("Unable to update visibility.", "error");
-    return;
-  }
   course.visible = next;
-  render();
+  const row = toggle.closest("tr");
+  if (row) row.classList.toggle("hidden-row", !next);
+  try {
+    const response = await fetch(`/api/courses/${course.id}/visible`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visible: next }),
+    });
+    if (!response.ok) throw new Error();
+  } catch {
+    course.visible = !next;
+    toggle.checked = !next;
+    if (row) row.classList.toggle("hidden-row", !next);
+    setStatus("Unable to update visibility.", "error");
+  }
 }
 
 async function deleteCourse(course) {

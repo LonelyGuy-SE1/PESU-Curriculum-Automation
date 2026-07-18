@@ -570,10 +570,10 @@ function csvToTable(text, isCsv) {
 }
 
 function closePreview() {
-  previewOverlay.hidden = true;
-  previewBody.innerHTML = "";
   const iframe = previewBody.querySelector("iframe");
   if (iframe && iframe.src.startsWith("blob:")) URL.revokeObjectURL(iframe.src);
+  previewOverlay.hidden = true;
+  previewBody.innerHTML = "";
 }
 
 previewClose.addEventListener("click", closePreview);
@@ -1354,33 +1354,7 @@ const initialVersion = initialParams.get("version");
 const initialCourse = initialParams.get("course");
 const initialLoad = initialVersion && initialCourse ? loadVersionCourse(initialVersion, initialCourse) : loadDocumentPreview();
 
-async function checkAuth() {
-  try {
-    const stored = localStorage.getItem('sb-supgrlinqgxvifijgbns-auth-token');
-    if (!stored) {
-      window.location.href = '/auth/';
-      return false;
-    }
-    const { access_token } = JSON.parse(stored);
-    if (!access_token) {
-      window.location.href = '/auth/';
-      return false;
-    }
-    const res = await fetch('/api/auth/check', {
-      headers: { 'Authorization': `Bearer ${access_token}` },
-    });
-    if (!res.ok) {
-      window.location.href = '/auth/';
-      return false;
-    }
-    return true;
-  } catch {
-    window.location.href = '/auth/';
-    return false;
-  }
-}
-
-Promise.all([checkAuth(), refreshVersions(), initialLoad]).catch(() => {
+Promise.all([refreshVersions(), initialLoad]).catch(() => {
   loading.classList.remove("active");
   setStatus("Backend unavailable.", "error");
 });
