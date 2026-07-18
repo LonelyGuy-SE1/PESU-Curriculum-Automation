@@ -70,6 +70,8 @@ form.addEventListener("submit", async (e) => {
   const parsed = parseCode(data.course_code);
   if (!parsed) {
     showError("Invalid course code format. Use format like UE25CS242B");
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Submit Course";
     return;
   }
 

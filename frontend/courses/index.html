@@ -6,6 +6,8 @@
     <link rel="icon" type="image/png" href="../images/SE1128.png" />
     <title>Course Management</title>
     <link rel="stylesheet" href="courses.css" />
+    <link rel="stylesheet" href="../shared/dialog.css" />
+    <script src="../shared/dialog.js"></script>
     <script src="courses.js" defer></script>
   </head>
   <body>
@@ -40,7 +42,7 @@
             <option value="hidden">Hidden only</option>
           </select>
           <input id="search" type="search" aria-label="Search courses" />
-          <span class="status-line" id="status"></span>
+          <span class="status-line" id="status" role="status"></span>
         </div>
 
         <div class="table-wrap">

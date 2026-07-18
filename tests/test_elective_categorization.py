@@ -5,10 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.services.elective_categorization import (
-    MIN_CONFIDENCE,
     _confirmation,
     _course_content,
-    _fetch_tracks,
     _parse_llm_response,
     _persist_assignments,
     _validate_assignments,

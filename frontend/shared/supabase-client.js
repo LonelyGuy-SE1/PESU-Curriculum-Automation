@@ -9,12 +9,3 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
   },
 });
-
-export async function requireAuth() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    location.href = '/auth/';
-    return false;
-  }
-  return true;
-}

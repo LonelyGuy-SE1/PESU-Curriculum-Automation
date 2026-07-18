@@ -46,3 +46,5 @@ def refine_submission(id: int):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except APIError as exc:
         raise database_http_exception(exc) from exc
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=f"Refinement failed: {exc}") from exc

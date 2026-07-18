@@ -2,6 +2,13 @@ const statusText = document.getElementById("status");
 const viewer = document.getElementById("viewer");
 const versionList = document.getElementById("version-list");
 const openEditor = document.getElementById("open-editor");
+const viewerLoading = document.getElementById("viewer-loading");
+const emptyState = document.getElementById("empty-state");
+const sidebar = document.getElementById("sidebar");
+const sidebarOverlay = document.getElementById("sidebar-overlay");
+const mobileMenuBtn = document.getElementById("mobile-menu");
+const collapseAllBtn = document.getElementById("collapse-all");
+const expandAllBtn = document.getElementById("expand-all");
 
 function setStatus(text, kind = "") {
   statusText.textContent = text || "";
@@ -13,7 +20,6 @@ function icon(name) {
   const icons = {
     chevron: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>',
     folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>',
-    tag: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>',
     edit: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
   };
   return icons[name] || "";
@@ -52,8 +58,36 @@ function renderVersionTree(groups) {
 
     const header = document.createElement("div");
     header.className = "tree-group-header";
-    header.innerHTML = `<span class="expand-icon">${icon("chevron")}</span><span class="folder-icon">${icon("folder")}</span><span class="group-label">${year}</span><span class="version-count">${versions.length}</span>`;
-    header.addEventListener("click", () => group.classList.toggle("collapsed"));
+    header.tabIndex = 0;
+    header.role = "button";
+    header.setAttribute("aria-expanded", "true");
+
+    const expandIcon = document.createElement("span");
+    expandIcon.className = "expand-icon";
+    expandIcon.innerHTML = icon("chevron");
+
+    const folderIcon = document.createElement("span");
+    folderIcon.className = "folder-icon";
+    folderIcon.innerHTML = icon("folder");
+
+    const label = document.createElement("span");
+    label.className = "group-label";
+    label.textContent = year;
+
+    const count = document.createElement("span");
+    count.className = "version-count";
+    count.textContent = String(versions.length);
+
+    header.append(expandIcon, folderIcon, label, count);
+
+    const toggleGroup = () => {
+      const collapsed = group.classList.toggle("collapsed");
+      header.setAttribute("aria-expanded", String(!collapsed));
+    };
+    header.addEventListener("click", toggleGroup);
+    header.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleGroup(); }
+    });
 
     const items = document.createElement("div");
     items.className = "tree-items";
@@ -61,6 +95,8 @@ function renderVersionTree(groups) {
     for (const v of versions) {
       const item = document.createElement("div");
       item.className = "tree-item";
+      item.tabIndex = 0;
+      item.role = "button";
       if (String(v.id) === String(activeVersionId)) item.classList.add("active");
       item.dataset.versionId = v.id;
 
@@ -87,10 +123,16 @@ function renderVersionTree(groups) {
       });
 
       item.append(info, editBtn);
-      item.addEventListener("click", (e) => {
+
+      const activate = (e) => {
         if (e.target.closest(".edit-btn")) return;
         loadVersion(v.id);
+      };
+      item.addEventListener("click", activate);
+      item.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(e); }
       });
+
       items.appendChild(item);
     }
 
@@ -110,11 +152,13 @@ function startEdit(v, itemEl) {
   nameInput.type = "text";
   nameInput.value = v.name || "";
   nameInput.placeholder = "Version name";
+  nameInput.maxLength = 200;
 
   const yearInput = document.createElement("input");
   yearInput.type = "text";
   yearInput.value = v.academic_year || "";
   yearInput.placeholder = "Category (e.g. 2025-2026)";
+  yearInput.maxLength = 50;
 
   const actions = document.createElement("div");
   actions.className = "edit-actions";
@@ -135,11 +179,16 @@ function startEdit(v, itemEl) {
 }
 
 async function saveEdit(versionId, name, academicYear, formEl) {
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    setStatus("Version name cannot be empty.", "error");
+    return;
+  }
   try {
     const res = await fetch(`/api/versions/${versionId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), academic_year: academicYear.trim() }),
+      body: JSON.stringify({ name: trimmedName, academic_year: academicYear.trim() }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || "Update failed");
     formEl.remove();
@@ -151,6 +200,7 @@ async function saveEdit(versionId, name, academicYear, formEl) {
 }
 
 async function loadVersions() {
+  setStatus("Loading versions...");
   try {
     const res = await fetch("/api/versions");
     if (!res.ok) throw new Error("Failed to load versions");
@@ -163,13 +213,77 @@ async function loadVersions() {
   }
 }
 
+let loadSeq = 0;
+
 function loadVersion(versionId) {
   activeVersionId = String(versionId);
   versionList.querySelectorAll(".tree-item").forEach((el) => el.classList.toggle("active", el.dataset.versionId === String(versionId)));
-  viewer.src = `/api/versions/${versionId}/preview?diff=1&_t=${Date.now()}`;
+
+  emptyState.hidden = true;
+  viewerLoading.hidden = false;
+  viewer.hidden = true;
+
+  const seq = ++loadSeq;
+  let timer;
+
+  const handler = () => {
+    clearTimeout(timer);
+    viewerLoading.hidden = true;
+    viewer.hidden = false;
+    viewer.removeEventListener("load", handler);
+  };
+  viewer.addEventListener("load", handler);
+
+  viewer.addEventListener("error", function errorHandler() {
+    clearTimeout(timer);
+    viewerLoading.hidden = true;
+    viewer.hidden = false;
+    viewer.removeEventListener("error", errorHandler);
+    viewer.removeEventListener("load", handler);
+    setStatus("Preview failed to load.", "error");
+  });
+
+  timer = setTimeout(() => {
+    if (seq === loadSeq) {
+      viewerLoading.hidden = true;
+      viewer.hidden = false;
+      viewer.removeEventListener("load", handler);
+      setStatus("Preview timed out.", "error");
+    }
+  }, 30000);
+
+  viewer.src = `/api/versions/${versionId}/preview?diff=1`;
   openEditor.href = `/live-editor/?version=${versionId}`;
   openEditor.hidden = false;
   setStatus(`Viewing diff for snapshot ${versionId}`);
+  closeSidebar();
 }
+
+function closeSidebar() {
+  sidebar.classList.remove("open");
+  sidebarOverlay.hidden = true;
+}
+
+function openSidebar() {
+  sidebar.classList.add("open");
+  sidebarOverlay.hidden = false;
+}
+
+if (mobileMenuBtn) mobileMenuBtn.addEventListener("click", () => sidebar.classList.contains("open") ? closeSidebar() : openSidebar());
+if (sidebarOverlay) sidebarOverlay.addEventListener("click", closeSidebar);
+
+if (collapseAllBtn) collapseAllBtn.addEventListener("click", () => {
+  versionList.querySelectorAll(".tree-group").forEach((g) => g.classList.add("collapsed"));
+  versionList.querySelectorAll(".tree-group-header").forEach((h) => h.setAttribute("aria-expanded", "false"));
+});
+
+if (expandAllBtn) expandAllBtn.addEventListener("click", () => {
+  versionList.querySelectorAll(".tree-group").forEach((g) => g.classList.remove("collapsed"));
+  versionList.querySelectorAll(".tree-group-header").forEach((h) => h.setAttribute("aria-expanded", "true"));
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && sidebar.classList.contains("open")) closeSidebar();
+});
 
 loadVersions().catch(() => setStatus("Failed to load versions.", "error"));

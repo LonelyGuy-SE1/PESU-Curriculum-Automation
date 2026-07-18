@@ -2,11 +2,9 @@ import logging
 import re
 
 from app.supabase import first_row, supabase
-
-logger = logging.getLogger(__name__)
 from app.services.books import parse_books, raw_book_section
+from app.services.curriculum import invalidate_curriculum_cache
 from app.services.deterministic import compute_hours, compute_program, compute_course_type
-from app.services.elective_categorization import categorize_refined_elective, is_elective_course
 from app.services.openrouter import call as llm
 
 logger = logging.getLogger(__name__)
@@ -498,12 +496,7 @@ Preferred Tools / Languages:
         refined_id = supabase.table("refined_submissions").insert(merged).execute().data[0]["id"]
 
     supabase.table("submissions").update({"status": "refined"}).eq("id", submission_id).execute()
-    if merged["is_elective"]:
-        try:
-            categorize_refined_elective(int(refined_id))
-        except Exception:
-            # Classification is isolated from the refinement outcome and can be rerun.
-            logger.exception("Elective categorization failed for refined_id=%s", refined_id)
+    invalidate_curriculum_cache()
 
     if merged["is_elective"]:
         try:

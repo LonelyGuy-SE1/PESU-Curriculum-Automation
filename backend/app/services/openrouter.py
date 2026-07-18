@@ -1,7 +1,9 @@
 import json
 import logging
 import os
+import time
 
+import httpx
 from dotenv import load_dotenv
 from httpx import Client, HTTPError, HTTPStatusError
 
@@ -50,13 +52,13 @@ _TOOL_LABELS = {
     "get_curriculum_json": "Loading curriculum",
     "get_curriculum_stats": "Computing statistics",
     "create_course_draft": "Creating draft",
+    "create_refined_course": "Creating course",
     "create_document_draft": "Creating document draft",
     "create_report": "Generating report",
     "create_spreadsheet": "Generating spreadsheet",
     "diff_course_json": "Comparing courses",
     "diff_versions": "Comparing versions",
     "get_version": "Loading snapshot",
-    "update_course_field": "Updating course",
     "update_deterministic_fields": "Updating course",
     "get_attachment_text": "Reading attachment",
     "list_specializations": "Loading specializations",
@@ -67,6 +69,12 @@ _TOOL_LABELS = {
     "fetch_url": "Fetching URL",
     "web_search": "Searching the web",
     "signal_done": "Finalizing",
+    "get_document_draft": "Reading document draft",
+    "create_curriculum_version": "Creating snapshot",
+    "get_course_draft": "Reading draft",
+    "remove_elective_from_tracks": "Removing elective",
+    "get_preview_url": "Getting preview URL",
+    "list_courses": "Looking up courses",
 }
 
 
@@ -117,6 +125,14 @@ def _raise_for_status(response) -> None:
             exc.response.headers.get("retry-after"),
             provider_message=exc.response.text[:500],
         ) from exc
+
+
+_RETRYABLE = (httpx.ReadError, httpx.ConnectError, httpx.RemoteProtocolError)
+_MAX_RETRIES = 3
+
+
+def _retry_sleep(attempt: int) -> None:
+    time.sleep(2 ** attempt)
 
 
 def _provider_error(data: dict) -> str:
@@ -184,36 +200,64 @@ def stream_chat(system: str, messages: list[dict], tools: list[dict] | None = No
 
 def _stream_chat(messages: list[dict]):
     payload = {"model": MODEL, "messages": messages, "stream": True}
-    with Client(timeout=120) as client:
-        with client.stream("POST", URL, headers=_headers(), json=payload) as response:
-            if response.is_error:
-                response.read()
-            response.raise_for_status()
-            for line in response.iter_lines():
-                token = _stream_token(line)
-                if token:
-                    yield token
+    last_exc = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            with Client(timeout=120) as client:
+                with client.stream("POST", URL, headers=_headers(), json=payload) as response:
+                    if response.is_error:
+                        response.read()
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        token = _stream_token(line)
+                        if token:
+                            yield token
+                    return
+        except _RETRYABLE as exc:
+            last_exc = exc
+            logger.warning("Transient network error in stream (attempt %d/%d): %s", attempt + 1, _MAX_RETRIES, exc)
+            if attempt < _MAX_RETRIES - 1:
+                _retry_sleep(attempt)
+    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
 
 
 def _chat_text(messages: list[dict]) -> str:
-    with Client(timeout=120) as client:
-        response = client.post(URL, headers=_headers(), json={"model": MODEL, "messages": messages})
-        _raise_for_status(response)
-        return _message_content(response.json())
+    last_exc = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            with Client(timeout=120) as client:
+                response = client.post(URL, headers=_headers(), json={"model": MODEL, "messages": messages})
+                _raise_for_status(response)
+                return _message_content(response.json())
+        except _RETRYABLE as exc:
+            last_exc = exc
+            logger.warning("Transient network error in chat_text (attempt %d/%d): %s", attempt + 1, _MAX_RETRIES, exc)
+            if attempt < _MAX_RETRIES - 1:
+                _retry_sleep(attempt)
+    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
 
 
 def _chat_message(messages: list[dict], tools: list[dict]) -> tuple[dict, int]:
-    with Client(timeout=120) as client:
-        response = client.post(URL, headers=_headers(), json={"model": MODEL, "messages": messages, "tools": tools})
-        _raise_for_status(response)
-        data = response.json()
-        prompt_tokens = (data.get("usage") or {}).get("prompt_tokens") or 0
-        return _assistant_message(data), prompt_tokens
+    last_exc = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            with Client(timeout=120) as client:
+                response = client.post(URL, headers=_headers(), json={"model": MODEL, "messages": messages, "tools": tools})
+                _raise_for_status(response)
+                data = response.json()
+                prompt_tokens = (data.get("usage") or {}).get("prompt_tokens") or 0
+                return _assistant_message(data), prompt_tokens
+        except _RETRYABLE as exc:
+            last_exc = exc
+            logger.warning("Transient network error (attempt %d/%d): %s", attempt + 1, _MAX_RETRIES, exc)
+            if attempt < _MAX_RETRIES - 1:
+                _retry_sleep(attempt)
+    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
 
 
 def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_tool_result=None):
     last_prompt_tokens = 0
-    for i in range(15):
+    for i in range(50):
         yield {"$status": f"Thinking (step {i + 1})..."}
         message, prompt_tokens = _chat_message(messages, tools)
         if prompt_tokens:
@@ -228,9 +272,18 @@ def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_to
             return
 
         messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": tool_calls})
+        done = False
+        result = {}
         for tool_call in tool_calls:
             name = (tool_call.get("function") or {}).get("name") or ""
-            arguments = _tool_arguments(tool_call)
+            try:
+                arguments = _tool_arguments(tool_call)
+            except (ValueError, json.JSONDecodeError) as exc:
+                result = {"error": f"Invalid tool arguments: {exc}"}
+                yield {"$status": f"{tool_status_label(name)}..."}
+                yield {"$event": "tool_result", "name": name, "status": "error"}
+                messages.append({"role": "tool", "tool_call_id": tool_call.get("id") or name, "name": name, "content": json.dumps(result, ensure_ascii=False)})
+                continue
             yield {"$status": f"{tool_status_label(name)}..."}
             yield {"$event": "tool_call", "name": name, "arguments": arguments}
             try:
@@ -248,6 +301,15 @@ def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_to
                     "content": json.dumps(result, ensure_ascii=False),
                 }
             )
+            if (result or {}).get("done"):
+                done = True
+        if done:
+            summary = str((result or {}).get("summary") or "").strip()
+            if summary:
+                yield summary
+            if last_prompt_tokens:
+                yield {"$usage": {"prompt_tokens": last_prompt_tokens, "context_length": context_length()}}
+            return
     yield "I created tool results, but could not finish the response. Please check the Review panel."
     if last_prompt_tokens:
         yield {"$usage": {"prompt_tokens": last_prompt_tokens, "context_length": context_length()}}

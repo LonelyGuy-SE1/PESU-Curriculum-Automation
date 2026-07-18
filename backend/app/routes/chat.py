@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 
@@ -161,8 +162,13 @@ Always respond by calling a tool -- never state limitations or guess. The availa
 Chaining tools: When a user request clearly requires multiple steps (e.g. "export semester 3 to CSV" needs list_courses then batch_read_courses then create_spreadsheet), chain the tools in a single turn. Do not stop after one tool if the task is not yet complete. Stop chaining and respond only when the task is done or you need user input.
 
 Read source documents with get_attachment_text, then call create_report to save generated content as a chat attachment.
-When the user asks to change the active course, call create_course_draft with the active_refined_id, only the fields that should change, and a short reason.
-When the user asks for changes across multiple courses or an uploaded document, inspect the curriculum or attachment text, then call create_document_draft with the affected courses.
+
+Tool selection for course changes (critical):
+- create_course_draft: ONLY for modifying an existing course. Requires refined_id (must be a valid ID from list_courses/batch_read_courses) and a "fields" object containing ONLY the fields to change. Do not pass all course data, only the delta. Example: fields={{\"text_books\": \"new books\"}}, reason=\"Updated textbooks\"
+- create_refined_course: ONLY for creating a brand-new course that does not exist in the curriculum yet. Pass all course details as flat arguments (course_code, course_title, semester, target_department, credit_category, etc.). Do not use "fields" wrapper. Deterministic fields (program, hours, credits, course_type) are auto-computed.
+- create_document_draft: For changes across multiple existing courses.
+
+Before creating a course, always call list_courses or batch_read_courses to check if it already exists. If the course_code is not in the list, use create_refined_course. If it exists, use create_course_draft with the refined_id from the list.
 When the user asks what changed, call diff_course_json or read the relevant draft before answering.
 For broad document requests, use get_curriculum_json to inspect the whole syllabus before proposing edits.
 For version comparison, call get_version to load a snapshot, then diff_versions to compare two versions.
@@ -170,7 +176,7 @@ For statistics and summaries, call get_curriculum_stats for aggregate data or ba
 For spreadsheet exports, call batch_read_courses to gather data, then create_spreadsheet to generate CSV or Excel files.
 For specialization management, call list_specializations to discover tracks, define_specialization to create one, and assign_elective_to_tracks / get_course_assignments to categorize electives.
 To fetch a public URL, call fetch_url and use the returned text.
-To search the web for current information, call web_search with a query.
+To search the web for current information or to ground a response in verified facts, call web_search with a query. Use this whenever you need to verify a claim, look up current data, or answer a question that is not covered by the curriculum data. Always cite the source when using web search results.
 Never apply a draft, never claim a draft was applied, and never claim the refined database was changed.
 After creating a draft, tell the user to review the diff in the Review panel before applying it.
 To change deterministic fields (program, hours, credits, course_type), call update_deterministic_fields. This creates a draft that is blocked until the user explicitly approves it in the Review panel. Confirm with the user before changing these fields.
@@ -302,12 +308,17 @@ def create_chat_message(session_id: int, payload: ChatMessagePayload):
         def flush_tool_results():
             while tool_results:
                 item = tool_results.pop(0)
-                draft = (item["result"] or {}).get("draft")
-                document_draft = (item["result"] or {}).get("document_draft")
+                result = item["result"] or {}
+                draft = result.get("draft")
+                document_draft = result.get("document_draft")
                 if item["name"] == "create_course_draft" and draft:
                     yield sse("draft", {"draft": draft})
                 if item["name"] == "create_document_draft" and document_draft:
                     yield sse("document_draft", {"document_draft": document_draft})
+                if item["name"] == "update_deterministic_fields" and draft:
+                    yield sse("draft", {"draft": draft})
+                if item["name"] == "create_refined_course" and result.get("refined_id"):
+                    yield sse("refined_course", {"refined_id": result["refined_id"], "updated": result.get("updated", False)})
 
         def save_assistant_message():
             content = "".join(answer).strip()
@@ -376,7 +387,6 @@ async def upload_chat_attachments(session_id: int, files: list[UploadFile] = Fil
         text, status, error = extract_text(file.filename or "attachment", file.content_type or "", data)
         
         # Store binary content as base64 for non-text files
-        import base64
         content_base64 = ""
         if file.content_type and not file.content_type.startswith("text/") and file.content_type != "application/json":
             content_base64 = base64.b64encode(data).decode()
@@ -420,7 +430,6 @@ def download_chat_attachment(session_id: int, attachment_id: int):
         raise HTTPException(status_code=404, detail="Attachment not found")
     row = row[0]
     
-    import base64
     content = row.get("content_base64")
     if content:
         data = base64.b64decode(content)
@@ -442,7 +451,6 @@ def preview_chat_attachment(session_id: int, attachment_id: int):
         raise HTTPException(status_code=404, detail="Attachment not found")
     row = row[0]
 
-    import base64
     content_type = row.get("content_type") or ""
     text = row.get("extracted_text") or ""
     b64 = row.get("content_base64") or ""

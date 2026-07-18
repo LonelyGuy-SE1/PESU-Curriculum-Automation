@@ -89,7 +89,7 @@ function render() {
     remove.textContent = "Delete";
     remove.addEventListener("click", (event) => {
       event.stopPropagation();
-      deleteCourse(course);
+      deleteCourse(course).catch(showError);
     });
     action.appendChild(remove);
     row.appendChild(action);
@@ -122,7 +122,7 @@ async function setVisibility(course, toggle) {
 }
 
 async function deleteCourse(course) {
-  if (!confirm(`Delete ${course.course_code || course.course_title}?`)) return;
+  if (!await showConfirm(`Delete ${course.course_code || course.course_title}?`)) return;
   setStatus("Deleting course...");
   const response = await fetch(`/api/courses/${course.id}`, { method: "DELETE" });
   if (!response.ok) throw new Error("Delete failed");

@@ -8,6 +8,7 @@ const viewer = document.getElementById("viewer");
 const openLink = document.getElementById("open");
 const downloadLink = document.getElementById("download");
 const statusText = document.getElementById("status");
+const loading = document.getElementById("loading");
 curriculumYear.value = requestedYear;
 if (requestedYear) localStorage.setItem("curriculumYear", requestedYear);
 
@@ -16,6 +17,7 @@ function clearPreview(message) {
   openLink.removeAttribute("href");
   downloadLink.removeAttribute("href");
   statusText.textContent = message;
+  if (loading) loading.hidden = true;
 }
 
 function yearValue() {
@@ -24,6 +26,10 @@ function yearValue() {
 
 function saveYear() {
   if (yearValue()) localStorage.setItem("curriculumYear", yearValue());
+}
+
+function htmlUrl(sem) {
+  return `/api/preview/html?curriculum_year=${encodeURIComponent(yearValue())}`;
 }
 
 function pdfUrl(sem, download = false) {
@@ -63,9 +69,22 @@ async function loadSemester(sem) {
     return;
   }
 
+  const html = htmlUrl(sem);
   const pdf = pdfUrl(sem);
+
+  if (loading) loading.hidden = false;
+  viewer.hidden = true;
+
+  const onLoad = () => {
+    if (loading) loading.hidden = true;
+    viewer.hidden = false;
+    viewer.removeEventListener("load", onLoad);
+  };
+  viewer.addEventListener("load", onLoad);
+
   viewer.src = pdf;
   openLink.href = pdf;
+  openLink.target = "_blank";
   downloadLink.href = pdfUrl(sem, true);
   statusText.textContent = sem === "all" ? "Overall" : `Semester ${sem}`;
 }

@@ -51,9 +51,13 @@ const attach = document.getElementById("attach");
 const files = document.getElementById("files");
 const draftAttachments = document.getElementById("draft-attachments");
 const send = document.getElementById("send");
+const stopBtn = document.getElementById("stop-btn");
+const versionDisplay = document.getElementById("version-display");
 const editor = document.getElementById("editor");
 const draft = document.getElementById("draft");
 const save = document.getElementById("save");
+const pendingCourseSelect = document.getElementById("pending-course-select");
+const loadPendingCourse = document.getElementById("load-pending-course");
 const courseDraftSelect = document.getElementById("course-draft-select");
 const loadCourseDraft = document.getElementById("load-course-draft");
 const documentDraftSelect = document.getElementById("document-draft-select");
@@ -89,13 +93,13 @@ const TOOL_LABELS = {
   get_curriculum_json: "Loading curriculum",
   get_curriculum_stats: "Computing statistics",
   create_course_draft: "Creating draft",
+  create_refined_course: "Creating course",
   create_document_draft: "Creating document draft",
   create_report: "Generating report",
   create_spreadsheet: "Generating spreadsheet",
   diff_course_json: "Comparing courses",
   diff_versions: "Comparing versions",
   get_version: "Loading snapshot",
-  update_course_field: "Updating course",
   update_deterministic_fields: "Updating course",
   get_attachment_text: "Reading attachment",
   list_specializations: "Loading specializations",
@@ -105,6 +109,12 @@ const TOOL_LABELS = {
   fetch_url: "Fetching URL",
   web_search: "Searching the web",
   signal_done: "Finalizing",
+  get_document_draft: "Reading document draft",
+  create_curriculum_version: "Creating snapshot",
+  get_course_draft: "Reading draft",
+  remove_elective_from_tracks: "Removing elective",
+  get_preview_url: "Getting preview URL",
+  list_courses: "Looking up courses",
 };
 
 let activeCourseId = "";
@@ -113,6 +123,8 @@ let activeDocumentDraftId = "";
 let activeSessionId = "";
 let queuedFiles = [];
 let versionMode = false;
+let activeAbortController = null;
+let currentVersionName = "";
 const initialParams = new URLSearchParams(location.search);
 
 if (logoutBtn) {
@@ -120,6 +132,48 @@ if (logoutBtn) {
     localStorage.removeItem("sb-supgrlinqgxvifijgbns-auth-token");
     location.href = "/auth/";
   });
+}
+
+if (stopBtn) {
+  stopBtn.addEventListener("click", () => {
+    if (activeAbortController) {
+      activeAbortController.abort();
+      activeAbortController = null;
+    }
+  });
+}
+
+function hideCourseControls() {
+  semester.hidden = true;
+  course.hidden = true;
+  const previewBtn = document.getElementById("preview");
+  if (previewBtn) previewBtn.hidden = true;
+}
+
+function showCourseControls() {
+  semester.hidden = false;
+  course.hidden = false;
+  const previewBtn = document.getElementById("preview");
+  if (previewBtn) previewBtn.hidden = false;
+}
+
+function updateRestoreVisibility() {
+  if (!restoreVersion) return;
+  const firstOption = versionSelect.options[0];
+  const isLatest = !firstOption || firstOption.value === versionSelect.value;
+  restoreVersion.hidden = isLatest || versionMode;
+}
+
+function updateVersionDisplay(name) {
+  currentVersionName = name || "";
+  if (versionDisplay) {
+    if (name) {
+      versionDisplay.textContent = name;
+      versionDisplay.hidden = false;
+    } else {
+      versionDisplay.hidden = true;
+    }
+  }
 }
 
 function setStatus(text, kind = "") {
@@ -194,6 +248,7 @@ async function refreshVersions() {
   if (!response.ok) return;
   const body = await response.json();
   versionSelect.replaceChildren(...(body.versions || []).map((item) => option(String(item.id), versionLabel(item))));
+  updateRestoreVisibility();
 }
 
 async function saveCurrentVersion() {
@@ -223,6 +278,7 @@ async function saveCurrentVersion() {
 
 async function restoreSelectedVersion() {
   if (!versionSelect.value) return;
+  if (!await showConfirm("Restore this version? This will archive all current courses and replace them with the snapshot.")) return;
   restoreVersion.disabled = true;
   try {
     setStatus("Restoring full version...");
@@ -263,7 +319,7 @@ async function createChatSession() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(activeCourseId ? { refined_id: Number(activeCourseId), title: statusText.textContent } : { title: "Full Document" }),
   });
-  if (!response.ok) throw new Error("Unable to create chat session");
+  if (!response.ok) throw new Error("Unable to create agent session");
   const body = await response.json();
   activeSessionId = String(body.session.id);
   localStorage.setItem(chatKey(), activeSessionId);
@@ -306,7 +362,7 @@ function exitRenameMode() {
 
 async function deleteActiveChat() {
   if (!activeSessionId) return;
-  if (!confirm("Delete this chat thread permanently?")) return;
+  if (!await showConfirm("Delete this agent thread permanently?")) return;
   const deleted = activeSessionId;
   const response = await fetch(`/api/chat/sessions/${deleted}`, { method: "DELETE" });
   if (!response.ok) throw new Error(await errorMessage(response, "Delete failed"));
@@ -816,6 +872,7 @@ async function refreshDraftSelectors() {
     documentDraftSelect.replaceChildren(...(body.document_drafts || []).filter((item) => item.status !== "applied").map((item) => option(String(item.id), documentDraftLabel(item))));
   }
   if (activeDraftId) courseDraftSelect.value = activeDraftId;
+  await refreshPendingCourses();
 }
 
 function filePreview(file) {
@@ -869,8 +926,11 @@ async function loadCourse(id) {
   activeCourseId = String(id);
   versionMode = false;
   save.disabled = false;
+  showCourseControls();
   course.disabled = false;
   semester.disabled = false;
+  updateVersionDisplay("");
+  updateRestoreVisibility();
   resetReview();
   loading.classList.add("active");
   const response = await fetch(`/api/refined/${id}`);
@@ -892,6 +952,7 @@ async function loadVersionCourse(versionId, refinedId) {
   activeCourseId = String(refinedId);
   versionMode = true;
   save.disabled = true;
+  showCourseControls();
   course.disabled = true;
   semester.disabled = true;
   resetReview();
@@ -901,6 +962,7 @@ async function loadVersionCourse(versionId, refinedId) {
   const body = await response.json();
   editor.value = JSON.stringify(body.fields || {}, null, 2);
   viewer.src = yearParam(`/api/versions/${versionId}/courses/${refinedId}/preview`);
+  updateVersionDisplay(body.version.name);
   setStatus(`${body.version.name}: ${body.fields?.course_title || `Course ${refinedId}`}`);
   queuedFiles = [];
   renderDraftAttachments();
@@ -914,8 +976,9 @@ async function loadDocumentPreview() {
   versionMode = false;
   viewMode.value = "document";
   save.disabled = true;
-  course.disabled = true;
-  semester.disabled = true;
+  hideCourseControls();
+  updateVersionDisplay("");
+  updateRestoreVisibility();
   editor.value = "";
   resetReview();
   chatStatusText.textContent = "";
@@ -924,6 +987,55 @@ async function loadDocumentPreview() {
   setStatus("Full Document");
   await ensureChatSession();
   await renderMessages();
+}
+
+async function refreshCourseDropdown() {
+  const sem = semester.value;
+  const ids = await courseIds(sem);
+  const prev = course.value;
+  course.replaceChildren(...ids.map((id) => option(id, `Course ${id}`)));
+  if (prev && ids.includes(prev)) course.value = prev;
+}
+
+async function loadCourseForReview(id) {
+  activeCourseId = String(id);
+  versionMode = false;
+  save.disabled = false;
+  showCourseControls();
+  course.disabled = false;
+  semester.disabled = false;
+  updateVersionDisplay("");
+  updateRestoreVisibility();
+  resetReview();
+  loading.classList.add("active");
+  const response = await fetch(`/api/refined/${id}`);
+  if (!response.ok) throw new Error("Unable to load course");
+  const row = await response.json();
+  const fields = row.fields || {};
+  editor.value = JSON.stringify(fields, null, 2);
+  viewer.src = yearParam(`/api/preview/course/${id}`);
+  const title = fields.course_title || `Course ${id}`;
+  setStatus(title);
+  const sem = String(fields.semester || "");
+  if (sem && semester.value !== sem) semester.value = sem;
+  await refreshCourseDropdown();
+  if (!course.querySelector(`option[value="${id}"]`)) {
+    course.appendChild(option(String(id), title));
+  }
+  course.value = String(id);
+  queuedFiles = [];
+  renderDraftAttachments();
+  setTab("fields");
+}
+
+async function refreshPendingCourses() {
+  try {
+    const response = await fetch("/api/preview/pending-courses");
+    if (!response.ok) return;
+    const body = await response.json();
+    const courses = body.courses || [];
+    pendingCourseSelect.replaceChildren(...courses.map((c) => option(String(c.id), `${c.course_code ? c.course_code + " - " : ""}${c.course_title || "Course " + c.id}`)));
+  } catch {}
 }
 
 async function loadSemester(sem) {
@@ -954,7 +1066,7 @@ if (togglePane) {
   togglePane.addEventListener("click", () => {
     const workspace = document.querySelector(".workspace");
     const focused = workspace.classList.toggle("chat-focus");
-    togglePane.title = focused ? "Collapse chat / expand preview" : "Expand chat / collapse preview";
+    togglePane.title = focused ? "Collapse agent / expand preview" : "Expand agent / collapse preview";
     togglePane.classList.toggle("active", focused);
   });
 }
@@ -964,12 +1076,14 @@ preview.addEventListener("click", () => {
 });
 semester.addEventListener("change", () => loadSemester(semester.value).catch(showError));
 course.addEventListener("change", () => loadCourse(course.value).catch(showError));
+versionSelect.addEventListener("change", () => updateRestoreVisibility());
 viewMode.addEventListener("change", async () => {
   try {
     if (viewMode.value === "document") {
       await loadDocumentPreview();
       return;
     }
+    showCourseControls();
     course.disabled = false;
     semester.disabled = false;
     await loadSemester(semester.value);
@@ -1032,9 +1146,12 @@ send.addEventListener("click", async () => {
   const content = message.value.trim();
   if (!content && !queuedFiles.length) return;
   send.disabled = true;
+  if (stopBtn) stopBtn.hidden = false;
   chatStatusText.textContent = "Analyzing...";
   chatSpinner.classList.add("active");
   let assistant = null;
+  const controller = new AbortController();
+  activeAbortController = controller;
   try {
     await ensureChatSession();
     const attachments = queuedFiles;
@@ -1052,9 +1169,10 @@ send.addEventListener("click", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content, metadata: { attachments } }),
+      signal: controller.signal,
     });
     if (!response.ok) {
-      throw new Error(await errorMessage(response, "Chat failed"));
+      throw new Error(await errorMessage(response, "Agent failed"));
     }
 
     let answer = "";
@@ -1084,7 +1202,7 @@ send.addEventListener("click", async () => {
         node.bubble.classList.add("tool-call");
       }
       if (event === "tool_result") {
-        const status = data.status === "ok" ? "✓" : "✗";
+        const status = data.status === "ok" ? "\u2713" : "\u2717";
         const toolMsg = `${status} ${data.name} completed`;
         const node = appendMessage({ role: "tool", content: toolMsg, created_at: new Date().toISOString() });
         node.bubble.classList.add("tool-result");
@@ -1099,7 +1217,12 @@ send.addEventListener("click", async () => {
         if (!answer) { answer = "Document draft ready for review."; renderMessageContent(assistant.content, answer); }
         loadDocumentDraftById(data.document_draft.id).catch(showError);
       }
-      if (event === "error") throw new Error(data.message || "Chat failed");
+      if (event === "refined_course" && data.refined_id) {
+        if (!assistant) assistant = appendMessage({ role: "assistant", content: "", created_at: new Date().toISOString() });
+        if (!answer) { answer = data.updated ? `Updated course ${data.refined_id}. Review in Fields tab and click Save to approve.` : `Created course ${data.refined_id}. Review in Fields tab and click Save to approve.`; renderMessageContent(assistant.content, answer); }
+        loadCourseForReview(data.refined_id).catch(() => {});
+      }
+      if (event === "error") throw new Error(data.message || "Agent failed");
       if (event === "done") {
         chatStatusText.textContent = "";
         chatSpinner.classList.remove("active");
@@ -1112,16 +1235,19 @@ send.addEventListener("click", async () => {
       }
     });
   } catch (error) {
-    const text = error instanceof Error ? error.message : "Chat failed";
+    const aborted = controller.signal.aborted;
+    const text = aborted ? "Stopped." : (error instanceof Error ? error.message : "Agent failed");
     chatStatusText.textContent = text;
     chatSpinner.classList.remove("active");
-    setStatus(text, "error");
-    if (assistant) {
+    setStatus(text, aborted ? "" : "error");
+    if (assistant && !aborted) {
       assistant.bubble.classList.add("error");
       renderMessageContent(assistant.content, text);
     }
   } finally {
     send.disabled = false;
+    if (stopBtn) stopBtn.hidden = true;
+    activeAbortController = null;
   }
 });
 
@@ -1129,7 +1255,8 @@ draft.addEventListener("click", async () => {
   const refinedId = activeCourseId || course.value;
   if (!refinedId || viewMode.value !== "course") return;
   setStatus("Creating draft...");
-  const parsed = JSON.parse(editor.value);
+  let parsed;
+  try { parsed = JSON.parse(editor.value); } catch { showError("Invalid JSON in editor. Please fix syntax errors."); return; }
   const response = await fetch("/api/agent/drafts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1153,6 +1280,7 @@ previewDraft.addEventListener("click", () => {
 
 applyDraft.addEventListener("click", async () => {
   if (!activeDraftId && !activeDocumentDraftId) return;
+  if (!await showConfirm("Apply this draft? This will overwrite current course data.")) return;
   setStatus("Applying draft...");
 
   if (activeDocumentDraftId) {
@@ -1189,11 +1317,16 @@ loadDocumentDraft.addEventListener("click", () => loadDocumentDraftById(document
 
 loadCourseDraft.addEventListener("click", () => loadCourseDraftById(courseDraftSelect.value).catch(showError));
 
+loadPendingCourse.addEventListener("click", () => loadCourseForReview(pendingCourseSelect.value).catch(showError));
+
 save.addEventListener("click", async () => {
   if (versionMode) return;
+  const targetId = activeCourseId || course.value;
+  if (!targetId) return;
   setStatus("Saving...");
-  const parsed = JSON.parse(editor.value);
-  const response = await fetch(`/api/refined/${activeCourseId || course.value}`, {
+  let parsed;
+  try { parsed = JSON.parse(editor.value); } catch { showError("Invalid JSON in editor. Please fix syntax errors."); return; }
+  const response = await fetch(`/api/refined/${targetId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fields: parsed }),
@@ -1201,7 +1334,10 @@ save.addEventListener("click", async () => {
   if (!response.ok) {
     throw new Error(await errorMessage(response, "Save failed"));
   }
-  await loadCourse(course.value);
+  setStatus("Saved.", "ready");
+  await refreshCourseDropdown();
+  await refreshPendingCourses();
+  await loadCourse(targetId);
   setTab("chat");
 });
 
