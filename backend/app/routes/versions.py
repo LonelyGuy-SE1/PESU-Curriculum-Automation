@@ -5,7 +5,7 @@ from postgrest.exceptions import APIError
 from app import cache
 from app.preview import build_course_preview, build_specialization_context
 from app.rendering import templates
-from app.services.curriculum import attach_submissions, DEFAULT_CURRICULUM_YEAR, selected_curriculum_year, update_refined_fields
+from app.services.curriculum import attach_submissions, DEFAULT_CURRICULUM_YEAR, invalidate_curriculum_cache, selected_curriculum_year, update_refined_fields
 from app.services.diffing import build_course_diff, diff_course
 from app.services.errors import database_http_exception
 from app.supabase import first_row, supabase
@@ -154,6 +154,7 @@ def restore_version(version_id: int):
             supabase.table("refined_submissions").update({"status": "archived"}).in_("id", extra_ids).execute()
         supabase.table("agent_drafts").update({"status": "proposed"}).eq("status", "applied").execute()
         supabase.table("agent_document_drafts").update({"status": "proposed"}).eq("status", "applied").execute()
+        invalidate_curriculum_cache()
     except APIError as exc:
         raise database_http_exception(exc) from exc
     cache.invalidate("ver_preview:")
@@ -242,7 +243,8 @@ def preview_version(version_id: int, diff: bool = Query(False), curriculum_year:
     if cached:
         return HTMLResponse(cached, headers={"Cache-Control": "public, max-age=30"})
 
-    current_rows = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).execute().data
+    refined_ids = [v["refined_id"] for v in version_courses if "refined_id" in v]
+    current_rows = supabase.table("refined_submissions").select("*").in_("id", refined_ids).execute().data if refined_ids else []
     current_rows = attach_submissions(current_rows)
     current = {row["id"]: build_course_preview(row) for row in current_rows}
 

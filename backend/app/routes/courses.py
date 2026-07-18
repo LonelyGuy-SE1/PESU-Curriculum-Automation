@@ -3,7 +3,7 @@ from postgrest.exceptions import APIError
 
 from app import cache
 from app.preview import build_course_preview
-from app.services.curriculum import attach_submissions
+from app.services.curriculum import attach_submissions, invalidate_curriculum_cache
 from app.services.errors import database_http_exception
 from app.supabase import first_row, supabase
 
@@ -39,6 +39,7 @@ def set_visibility(refined_id: int, body: dict):
     except APIError as exc:
         raise database_http_exception(exc) from exc
     cache.invalidate("courses_list")
+    invalidate_curriculum_cache()
     return {"message": "Visibility updated", "course": result.data[0] if result.data else None}
 
 
@@ -52,4 +53,5 @@ def delete_course(refined_id: int):
     except APIError as exc:
         raise database_http_exception(exc) from exc
     cache.invalidate("courses_list")
+    invalidate_curriculum_cache()
     return {"message": "Course removed", "course": result.data[0] if result.data else None}

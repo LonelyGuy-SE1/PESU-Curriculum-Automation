@@ -56,7 +56,7 @@ def preview_all_html(curriculum_year: str | None = Query(None)):
     cache_key = f"full_html:{cy}"
     cached = cache.get(cache_key)
     if cached is not None:
-        return HTMLResponse(cached, headers={"Cache-Control": "no-store"})
+        return HTMLResponse(cached, headers={"Cache-Control": "public, max-age=30, s-maxage=300, stale-while-revalidate=600"})
     result = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).eq("visible", True).execute()
     courses = ordered_courses(result.data)
     html = templates.get_template("jinja_sample.html").render(
@@ -68,7 +68,7 @@ def preview_all_html(curriculum_year: str | None = Query(None)):
         **build_specialization_context(cy),
     )
     cache.put(cache_key, html, ttl=120)
-    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+    return HTMLResponse(html, headers={"Cache-Control": "public, max-age=30, s-maxage=300, stale-while-revalidate=600"})
 
 
 @router.get("/preview/pdf")
@@ -120,7 +120,10 @@ def pdf_response(pdf: bytes, filename: str, download: bool) -> Response:
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'{disposition}; filename="{filename}"', "Cache-Control": "public, max-age=30"},
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{filename}"',
+            "Cache-Control": "public, max-age=30, s-maxage=300, stale-while-revalidate=600",
+        },
     )
 
 

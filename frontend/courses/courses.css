@@ -124,7 +124,7 @@ td.center {
 
 .empty {
   padding: 20px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   text-align: center;
 }
 

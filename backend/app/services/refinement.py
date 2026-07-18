@@ -2,6 +2,7 @@ import re
 
 from app.supabase import first_row, supabase
 from app.services.books import parse_books, raw_book_section
+from app.services.curriculum import invalidate_curriculum_cache
 from app.services.deterministic import compute_hours, compute_program, compute_course_type
 from app.services.openrouter import call as llm
 
@@ -487,5 +488,6 @@ Preferred Tools / Languages:
         supabase.table("refined_submissions").insert(merged).execute()
 
     supabase.table("submissions").update({"status": "refined"}).eq("id", submission_id).execute()
+    invalidate_curriculum_cache()
 
     return merged

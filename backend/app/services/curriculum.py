@@ -6,6 +6,14 @@ from app.services.diffing import diff_course, merge_fields, validate_draft
 from app.supabase import first_row, supabase
 
 DEFAULT_CURRICULUM_YEAR = environ.get("CURRICULUM_YEAR", "").strip()
+
+
+def invalidate_curriculum_cache():
+    """Invalidate all cached curriculum PDF/HTML after data changes."""
+    cache.invalidate("full_pdf:")
+    cache.invalidate("full_html:")
+    cache.invalidate("sem_pdf:")
+    cache.invalidate("course:")
 SOURCE_ORDER = {
     "UE25CS151A": 1,
     "UE25CS151B": 1,
@@ -142,10 +150,16 @@ def selected_curriculum_year(override: str | None = None) -> str:
 
 
 def refined_course(refined_id: int) -> dict:
+    cache_key = f"course:{refined_id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
     row = first_row(supabase.table("refined_submissions").select("*").eq("id", refined_id))
     if not row:
         raise LookupError("Refined submission not found")
-    return build_course_preview(attach_submissions([row])[0])
+    result = build_course_preview(attach_submissions([row])[0])
+    cache.put(cache_key, result, ttl=30)
+    return result
 
 
 def update_refined_fields(refined_id: int, fields: dict) -> dict | None:
@@ -157,6 +171,7 @@ def update_refined_fields(refined_id: int, fields: dict) -> dict | None:
     if row and row.get("status") == "draft":
         update["status"] = "refined"
     result = supabase.table("refined_submissions").update(update).eq("id", refined_id).execute()
+    invalidate_curriculum_cache()
     return result.data[0] if result.data else None
 
 

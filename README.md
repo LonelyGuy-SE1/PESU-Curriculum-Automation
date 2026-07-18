@@ -14,6 +14,7 @@ pinned: false
 ![Python](https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.138-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![Supabase](https://img.shields.io/badge/supabase-postgres-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
+![Upstash Redis](https://img.shields.io/badge/upstash--redis-cache-DD0000?style=flat-square&logo=redis&logoColor=white)
 ![OpenRouter](https://img.shields.io/badge/openrouter--llm-6366F1?style=flat-square&logo=openai&logoColor=white)
 ![WeasyPrint](https://img.shields.io/badge/weasyprint-pdf-E64B1A?style=flat-square&logo=markdown&logoColor=white)
 ![CI](https://img.shields.io/badge/CI-passing-brightgreen?style=flat-square&logo=githubactions&logoColor=white)
@@ -55,6 +56,7 @@ flowchart LR
 | Backend | Python 3.12, FastAPI, Uvicorn |
 | Frontend | Vanilla HTML/CSS/JS (no build step) |
 | Database | Supabase (PostgreSQL) |
+| Cache | Upstash Redis (serverless, survives sleep) |
 | AI/LLM | OpenRouter (streaming + tool calling) |
 | PDF | Jinja2 + WeasyPrint (A4 layout) |
 | Auth | Supabase Auth (JWT) |

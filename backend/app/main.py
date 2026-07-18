@@ -39,6 +39,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.routes.preview import preload_pdfs
     preload_pdfs()
     yield
+    from app import cache
+    cache.close()
 
 
 app = FastAPI(title="PESU Curriculum Automation", lifespan=lifespan)

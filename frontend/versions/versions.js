@@ -213,6 +213,8 @@ async function loadVersions() {
   }
 }
 
+let loadSeq = 0;
+
 function loadVersion(versionId) {
   activeVersionId = String(versionId);
   versionList.querySelectorAll(".tree-item").forEach((el) => el.classList.toggle("active", el.dataset.versionId === String(versionId)));
@@ -221,12 +223,34 @@ function loadVersion(versionId) {
   viewerLoading.hidden = false;
   viewer.hidden = true;
 
+  const seq = ++loadSeq;
+  let timer;
+
   const handler = () => {
+    clearTimeout(timer);
     viewerLoading.hidden = true;
     viewer.hidden = false;
     viewer.removeEventListener("load", handler);
   };
   viewer.addEventListener("load", handler);
+
+  viewer.addEventListener("error", function errorHandler() {
+    clearTimeout(timer);
+    viewerLoading.hidden = true;
+    viewer.hidden = false;
+    viewer.removeEventListener("error", errorHandler);
+    viewer.removeEventListener("load", handler);
+    setStatus("Preview failed to load.", "error");
+  });
+
+  timer = setTimeout(() => {
+    if (seq === loadSeq) {
+      viewerLoading.hidden = true;
+      viewer.hidden = false;
+      viewer.removeEventListener("load", handler);
+      setStatus("Preview timed out.", "error");
+    }
+  }, 30000);
 
   viewer.src = `/api/versions/${versionId}/preview?diff=1`;
   openEditor.href = `/live-editor/?version=${versionId}`;

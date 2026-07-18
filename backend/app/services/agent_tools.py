@@ -11,6 +11,7 @@ from app.services.curriculum import (
     REFINED_FIELDS,
     create_version_snapshot,
     draft_record,
+    invalidate_curriculum_cache,
     load_agent_draft,
     load_document_draft,
     ordered_courses,
@@ -316,6 +317,7 @@ def _create_refined_course(arguments: dict) -> dict:
             .execute()
         )
         row = result.data[0] if result.data else None
+        invalidate_curriculum_cache()
         return {"refined_id": int(refined_id), "updated": True, "course": row}
 
     if "submission_id" not in fields or not fields.get("submission_id"):
@@ -343,6 +345,7 @@ def _create_refined_course(arguments: dict) -> dict:
 
     result = supabase.table("refined_submissions").insert(fields).execute()
     row = result.data[0]
+    invalidate_curriculum_cache()
     return {"refined_id": row["id"], "updated": False, "course": row}
 
 

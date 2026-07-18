@@ -278,6 +278,7 @@ async function saveCurrentVersion() {
 
 async function restoreSelectedVersion() {
   if (!versionSelect.value) return;
+  if (!await showConfirm("Restore this version? This will archive all current courses and replace them with the snapshot.")) return;
   restoreVersion.disabled = true;
   try {
     setStatus("Restoring full version...");
@@ -361,7 +362,7 @@ function exitRenameMode() {
 
 async function deleteActiveChat() {
   if (!activeSessionId) return;
-  if (!confirm("Delete this agent thread permanently?")) return;
+  if (!await showConfirm("Delete this agent thread permanently?")) return;
   const deleted = activeSessionId;
   const response = await fetch(`/api/chat/sessions/${deleted}`, { method: "DELETE" });
   if (!response.ok) throw new Error(await errorMessage(response, "Delete failed"));
@@ -1254,7 +1255,8 @@ draft.addEventListener("click", async () => {
   const refinedId = activeCourseId || course.value;
   if (!refinedId || viewMode.value !== "course") return;
   setStatus("Creating draft...");
-  const parsed = JSON.parse(editor.value);
+  let parsed;
+  try { parsed = JSON.parse(editor.value); } catch { showError("Invalid JSON in editor. Please fix syntax errors."); return; }
   const response = await fetch("/api/agent/drafts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1278,6 +1280,7 @@ previewDraft.addEventListener("click", () => {
 
 applyDraft.addEventListener("click", async () => {
   if (!activeDraftId && !activeDocumentDraftId) return;
+  if (!await showConfirm("Apply this draft? This will overwrite current course data.")) return;
   setStatus("Applying draft...");
 
   if (activeDocumentDraftId) {
@@ -1321,7 +1324,8 @@ save.addEventListener("click", async () => {
   const targetId = activeCourseId || course.value;
   if (!targetId) return;
   setStatus("Saving...");
-  const parsed = JSON.parse(editor.value);
+  let parsed;
+  try { parsed = JSON.parse(editor.value); } catch { showError("Invalid JSON in editor. Please fix syntax errors."); return; }
   const response = await fetch(`/api/refined/${targetId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
