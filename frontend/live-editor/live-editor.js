@@ -318,7 +318,7 @@ async function createChatSession() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(activeCourseId ? { refined_id: Number(activeCourseId), title: statusText.textContent } : { title: "Full Document" }),
   });
-  if (!response.ok) throw new Error("Unable to create chat session");
+  if (!response.ok) throw new Error("Unable to create agent session");
   const body = await response.json();
   activeSessionId = String(body.session.id);
   localStorage.setItem(chatKey(), activeSessionId);
@@ -361,7 +361,7 @@ function exitRenameMode() {
 
 async function deleteActiveChat() {
   if (!activeSessionId) return;
-  if (!confirm("Delete this chat thread permanently?")) return;
+  if (!confirm("Delete this agent thread permanently?")) return;
   const deleted = activeSessionId;
   const response = await fetch(`/api/chat/sessions/${deleted}`, { method: "DELETE" });
   if (!response.ok) throw new Error(await errorMessage(response, "Delete failed"));
@@ -1065,7 +1065,7 @@ if (togglePane) {
   togglePane.addEventListener("click", () => {
     const workspace = document.querySelector(".workspace");
     const focused = workspace.classList.toggle("chat-focus");
-    togglePane.title = focused ? "Collapse chat / expand preview" : "Expand chat / collapse preview";
+    togglePane.title = focused ? "Collapse agent / expand preview" : "Expand agent / collapse preview";
     togglePane.classList.toggle("active", focused);
   });
 }
@@ -1171,7 +1171,7 @@ send.addEventListener("click", async () => {
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new Error(await errorMessage(response, "Chat failed"));
+      throw new Error(await errorMessage(response, "Agent failed"));
     }
 
     let answer = "";
@@ -1221,7 +1221,7 @@ send.addEventListener("click", async () => {
         if (!answer) { answer = data.updated ? `Updated course ${data.refined_id}. Review in Fields tab and click Save to approve.` : `Created course ${data.refined_id}. Review in Fields tab and click Save to approve.`; renderMessageContent(assistant.content, answer); }
         loadCourseForReview(data.refined_id).catch(() => {});
       }
-      if (event === "error") throw new Error(data.message || "Chat failed");
+      if (event === "error") throw new Error(data.message || "Agent failed");
       if (event === "done") {
         chatStatusText.textContent = "";
         chatSpinner.classList.remove("active");
@@ -1235,7 +1235,7 @@ send.addEventListener("click", async () => {
     });
   } catch (error) {
     const aborted = controller.signal.aborted;
-    const text = aborted ? "Stopped." : (error instanceof Error ? error.message : "Chat failed");
+    const text = aborted ? "Stopped." : (error instanceof Error ? error.message : "Agent failed");
     chatStatusText.textContent = text;
     chatSpinner.classList.remove("active");
     setStatus(text, aborted ? "" : "error");
