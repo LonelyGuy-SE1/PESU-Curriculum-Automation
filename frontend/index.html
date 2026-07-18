@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="images/SE1128.png" />
     <title>PESU Curriculum Automation</title>
     <link rel="stylesheet" href="home/home.css" />
   </head>
@@ -10,53 +11,34 @@
     <main class="home-shell">
       <section class="home-panel">
         <h1>PESU Curriculum Automation</h1>
-        <div class="rule"></div>
-
+        <div class="year-bar">
+          <label class="year-label" for="curriculum-year">Academic Year</label>
+          <input id="curriculum-year" type="text" inputmode="numeric" placeholder="2025-2026" />
+          <button id="save-year" type="button">Save</button>
+          <span class="year-status" id="year-status"></span>
+        </div>
         <nav class="surface-grid" aria-label="Curriculum surfaces">
-          <a class="surface-link" href="form/">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <ellipse cx="12" cy="5" rx="8" ry="3"/>
-              <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/>
-              <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>
-            </svg>
-            Raw Data
-          </a>
-
-          <a class="surface-link" href="courses/">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5c-.8 0-1.5-.7-1.5-1.5z"/>
-              <path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5c.8 0 1.5-.7 1.5-1.5z"/>
-            </svg>
-            Courses
-          </a>
-
-          <a class="surface-link" href="preview/">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-            Preview
-          </a>
-
-          <a class="surface-link" href="live-editor/">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 20l4.2-1.2L19 8c.8-.8.8-2 0-2.8l-.2-.2c-.8-.8-2-.8-2.8 0L5.2 15.8 4 20z"/>
-              <path d="M14 6.5l3.5 3.5"/>
-            </svg>
-            Live Editor
-          </a>
-
-          <a class="surface-link" href="versions/">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="9"/>
-              <path d="M12 7v5l3.5 2"/>
-            </svg>
-            Versions
-          </a>
+          <a class="surface-link" href="form/">Raw Data</a>
+          <a class="surface-link" href="courses/">Courses</a>
+          <a class="surface-link" href="preview/">Preview</a>
+          <a class="surface-link" href="live-editor/">Live Editor</a>
+          <a class="surface-link" href="versions/">Versions</a>
         </nav>
       </section>
     </main>
-
     <script src="/shared/auth-guard.js"></script>
+    <script>
+      const yearInput = document.getElementById("curriculum-year");
+      const saveBtn = document.getElementById("save-year");
+      const yearStatus = document.getElementById("year-status");
+      yearInput.value = localStorage.getItem("curriculumYear") || "";
+      saveBtn.addEventListener("click", () => {
+        const val = yearInput.value.trim();
+        if (val) localStorage.setItem("curriculumYear", val);
+        else localStorage.removeItem("curriculumYear");
+        yearStatus.textContent = "Saved";
+        setTimeout(() => { yearStatus.textContent = ""; }, 1500);
+      });
+    </script>
   </body>
 </html>

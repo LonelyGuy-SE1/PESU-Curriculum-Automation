@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2.ext import do
 from markupsafe import Markup, escape
 
 APP_DIR = Path(__file__).resolve().parent
@@ -22,7 +23,7 @@ def _find_frontend_dir() -> Path:
 
 
 FRONTEND_DIR = _find_frontend_dir()
-templates = Environment(loader=FileSystemLoader(APP_DIR / "templates"), autoescape=select_autoescape(["html", "xml"]))
+templates = Environment(loader=FileSystemLoader(APP_DIR / "templates"), autoescape=select_autoescape(["html", "xml"]), extensions=[do])
 URL_RE = re.compile(r"https?://[^\s<>()]+")
 YEAR_RE = re.compile(r"\d{4}")
 
@@ -71,3 +72,15 @@ def course_code_for_year(value: str, semester, curriculum_year: str) -> str:
 templates.filters["linkify"] = linkify
 templates.filters["course_code_for_year"] = course_code_for_year
 templates.globals["batch_label"] = batch_label
+
+SEMESTER_NAMES = {
+    "1": "I",
+    "2": "II",
+    "3": "III",
+    "4": "IV",
+    "5": "V",
+    "6": "VI",
+    "7": "VII",
+    "8": "VIII",
+}
+templates.globals["SEMESTER_NAMES"] = SEMESTER_NAMES

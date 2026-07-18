@@ -1,9 +1,13 @@
+import logging
 import re
 
 from app.supabase import first_row, supabase
 from app.services.books import parse_books, raw_book_section
+from app.services.curriculum import invalidate_curriculum_cache
 from app.services.deterministic import compute_hours, compute_program, compute_course_type
 from app.services.openrouter import call as llm
+
+logger = logging.getLogger(__name__)
 
 WORD = re.compile(r"\w+")
 UNIT_LINE = re.compile(r"\b(Unit\s+\d+|Module\s+(?:\d+|[IVX]+))\s*[:.-]?\s*(.*)$", re.IGNORECASE)
@@ -417,13 +421,17 @@ def build_refined_payload(sub: dict, out: dict, prior_courses: list[str] | None 
     objectives = _lines(out.get("objectives"))[:4]
     course_outcomes = _lines(out.get("course_outcomes"))[:4] or objectives
 
+    from app.services.elective_categorization import is_elective_course
+
+    code = _course_code(raw_content) or sub["course_code"]
     return {
         "submission_id": sub["id"],
         "semester": int(sub["semester"]),
-        "course_code": _course_code(raw_content),
+        "course_code": code,
         "course_title": _text(out.get("course_title"), sub["course_title"]),
         "program": compute_program(sub["target_department"]),
         "course_type": compute_course_type(sub["credit_category"]),
+        "is_elective": is_elective_course({"course_code": code, "semester": sub["semester"]}),
         **det,
         "prelude": _text(out.get("prelude"), f"This course covers {sub['course_title'].strip()}."),
         "objectives": objectives,
@@ -483,9 +491,18 @@ Preferred Tools / Languages:
     existing = supabase.table("refined_submissions").select("id").eq("submission_id", submission_id).execute().data
     if existing:
         supabase.table("refined_submissions").update(merged).eq("submission_id", submission_id).execute()
+        refined_id = existing[0]["id"]
     else:
-        supabase.table("refined_submissions").insert(merged).execute()
+        refined_id = supabase.table("refined_submissions").insert(merged).execute().data[0]["id"]
 
     supabase.table("submissions").update({"status": "refined"}).eq("id", submission_id).execute()
+    invalidate_curriculum_cache()
+
+    if merged["is_elective"]:
+        try:
+            from app.services.elective_categorization import categorize_refined_elective
+            categorize_refined_elective(int(refined_id))
+        except Exception:
+            logger.exception("Elective categorization failed for refined_id=%s", refined_id)
 
     return merged

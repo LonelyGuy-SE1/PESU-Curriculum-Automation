@@ -13,6 +13,8 @@ REQUIRED_TABLES = (
     "chat_sessions",
     "chat_messages",
     "chat_attachments",
+    "specialization_definitions",
+    "course_specialization_assignments",
 )
 
 

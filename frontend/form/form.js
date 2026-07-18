@@ -27,8 +27,7 @@ function parseCode(code) {
   const offering = DEPT_OFFERING[dept] || "CS";
   const target = DEPT_TARGET[dept] || "CSE";
   let credit = "4";
-  if (suffix === "A" || suffix === "B") credit = "4";
-  else if (suffix === "A*" || suffix === "B*") credit = "0";
+  if (suffix === "A*" || suffix === "B*") credit = "0";
   else if (suffix.endsWith("XX") || suffix.endsWith("AX") || suffix.endsWith("BX") || ["AXX","ABX","BAX","BBX"].includes(suffix)) credit = "5";
   const isLateral = suffix.includes("*");
   return { year, dept, semester, offering, target, credit, isLateral, baseCode: c };
@@ -71,6 +70,8 @@ form.addEventListener("submit", async (e) => {
   const parsed = parseCode(data.course_code);
   if (!parsed) {
     showError("Invalid course code format. Use format like UE25CS242B");
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Submit Course";
     return;
   }
 

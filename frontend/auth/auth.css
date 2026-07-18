@@ -23,12 +23,6 @@
   margin-bottom: 28px;
 }
 
-.auth-logo {
-  width: 64px;
-  height: 64px;
-  margin-bottom: 16px;
-}
-
 .auth-header h1 {
   margin: 0 0 8px;
   font-size: 24px;
@@ -126,20 +120,4 @@
 
 .btn-block {
   width: 100%;
-}
-
-.auth-footer {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
-  text-align: center;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.auth-footer code {
-  background: var(--page-bg);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }

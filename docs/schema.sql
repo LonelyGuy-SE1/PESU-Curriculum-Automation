@@ -33,6 +33,8 @@ create table if not exists refined_submissions (
   self_study int not null default 0,
   credits int not null default 0,
   course_type text not null default '',
+  is_elective boolean not null default false,
+  visible boolean not null default true,
   units jsonb not null default '[]'::jsonb,
   objectives text not null default '',
   course_outcomes text not null default '',
@@ -43,6 +45,26 @@ create table if not exists refined_submissions (
   raw_course_content text not null default '',
   status text not null default 'refined',
   created_at timestamptz default now()
+);
+
+-- Specialization track definitions (e.g. SCC, MIDS, CSCS for semesters 5 & 6)
+create table if not exists specialization_definitions (
+  id bigint generated always as identity primary key,
+  semester int not null,
+  letter text not null,
+  name text not null,
+  key text not null,
+  academic_year text not null default '',
+  created_at timestamptz default now()
+);
+
+-- Which electives belong to which specialization tracks
+create table if not exists course_specialization_assignments (
+  id bigint generated always as identity primary key,
+  refined_id bigint references refined_submissions(id) on delete cascade,
+  specialization_id bigint references specialization_definitions(id) on delete cascade,
+  created_at timestamptz default now(),
+  unique (refined_id, specialization_id)
 );
 
 -- Curriculum version snapshots

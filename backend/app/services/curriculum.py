@@ -1,10 +1,19 @@
 from os import environ
 
+from app import cache
 from app.preview import build_course_preview
 from app.services.diffing import diff_course, merge_fields, validate_draft
 from app.supabase import first_row, supabase
 
 DEFAULT_CURRICULUM_YEAR = environ.get("CURRICULUM_YEAR", "").strip()
+
+
+def invalidate_curriculum_cache():
+    """Invalidate all cached curriculum PDF/HTML after data changes."""
+    cache.invalidate("full_pdf:")
+    cache.invalidate("full_html:")
+    cache.invalidate("sem_pdf:")
+    cache.invalidate("course:")
 SOURCE_ORDER = {
     "UE25CS151A": 1,
     "UE25CS151B": 1,
@@ -69,8 +78,15 @@ def attach_submissions(rows: list[dict]) -> list[dict]:
     ids = [row["submission_id"] for row in rows if row.get("submission_id")]
     if not ids:
         return rows
+    cache_key = f"attach:{','.join(str(i) for i in sorted(ids))}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        for row in rows:
+            row["_submission"] = cached.get(row.get("submission_id"), {})
+        return rows
     submissions = supabase.table("submissions").select("*").in_("id", ids).execute().data
     by_id = {row["id"]: row for row in submissions}
+    cache.put(cache_key, by_id, ttl=30)
     for row in rows:
         row["_submission"] = by_id.get(row.get("submission_id"), {})
     return rows
@@ -82,7 +98,17 @@ def ordered_courses(rows: list[dict]) -> list[dict]:
     return [build_course_preview(row) for row in rows]
 
 
-def course_sort_key(row: dict) -> tuple[int, int, int]:
+def course_credits(row: dict) -> int:
+    value = row.get("credits")
+    if value not in (None, ""):
+        return int(value)
+    category = str((row.get("_submission") or {}).get("credit_category") or "").strip()
+    if category.isdigit():
+        return int(category)
+    return 0
+
+
+def course_sort_key(row: dict) -> tuple[int, int, int, int]:
     semester = int(row.get("semester") or 0)
     code = str(row.get("course_code") or "").replace(" ", "").upper()
     order = SOURCE_ORDER.get(code)
@@ -90,7 +116,7 @@ def course_sort_key(row: dict) -> tuple[int, int, int]:
         order = elective_order(code, "AA", "AB")
     if order is None and semester == 6:
         order = elective_order(code, "BA", "BB")
-    return semester, order or 900, int(row.get("id") or 0)
+    return semester, -course_credits(row), order or 900, int(row.get("id") or 0)
 
 
 def elective_order(code: str, first_group: str, second_group: str) -> int | None:
@@ -102,7 +128,7 @@ def elective_order(code: str, first_group: str, second_group: str) -> int | None
 
 
 def create_version_snapshot(name: str) -> dict:
-    rows = supabase.table("refined_submissions").select("*").execute().data
+    rows = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).execute().data
     rows = attach_submissions(rows)
     courses = [{"refined_id": row["id"], "course_json": build_course_preview(row)} for row in rows]
     program = courses[0]["course_json"].get("program") if courses else ""
@@ -124,10 +150,16 @@ def selected_curriculum_year(override: str | None = None) -> str:
 
 
 def refined_course(refined_id: int) -> dict:
+    cache_key = f"course:{refined_id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
     row = first_row(supabase.table("refined_submissions").select("*").eq("id", refined_id))
     if not row:
         raise LookupError("Refined submission not found")
-    return build_course_preview(attach_submissions([row])[0])
+    result = build_course_preview(attach_submissions([row])[0])
+    cache.put(cache_key, result, ttl=30)
+    return result
 
 
 def update_refined_fields(refined_id: int, fields: dict) -> dict | None:
@@ -135,7 +167,11 @@ def update_refined_fields(refined_id: int, fields: dict) -> dict | None:
     for key in ("semester", "lecture_hours", "tutorial_hours", "practical_hours", "self_study", "credits"):
         if key in update:
             update[key] = int(update[key] or 0)
+    row = first_row(supabase.table("refined_submissions").select("status").eq("id", refined_id))
+    if row and row.get("status") == "draft":
+        update["status"] = "refined"
     result = supabase.table("refined_submissions").update(update).eq("id", refined_id).execute()
+    invalidate_curriculum_cache()
     return result.data[0] if result.data else None
 
 

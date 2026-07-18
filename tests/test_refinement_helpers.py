@@ -1,4 +1,12 @@
 from app.services.refinement import _books, _course_code, _prior_matches, _units_from_course_contents, build_refined_payload
+from app.services.elective_categorization import is_elective_course
+
+
+def test_elective_detection_mirrors_specialization_code_groups():
+    assert is_elective_course({"semester": 5, "course_code": "UE23CS342AAX"})
+    assert is_elective_course({"semester": 6, "course_code": "UE23CS343BBX"})
+    assert not is_elective_course({"semester": 4, "course_code": "UE23CS342AAX"})
+    assert not is_elective_course({"semester": 5, "course_code": "UE23CS351A"})
 
 
 def test_units_are_read_from_course_contents():

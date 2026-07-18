@@ -19,5 +19,9 @@ def test_course_type_mapping():
 
 
 def test_unknown_values_fail_fast():
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         compute_hours("9")
+    with pytest.raises(ValueError):
+        compute_program("XX")
+    with pytest.raises(ValueError):
+        compute_course_type("9")

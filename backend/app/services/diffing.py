@@ -158,3 +158,75 @@ def _topics(text: str) -> set[str]:
         if len(topic) >= 4:
             topics.add(topic)
     return topics
+
+
+def diff_text_field(old: str, new: str) -> dict | None:
+    if old == new:
+        return None
+    return {"kind": "text", "old": old or "", "new": new or ""}
+
+
+def diff_list_field(old: list, new: list) -> dict | None:
+    if old == new:
+        return None
+    old_set = set(old)
+    new_set = set(new)
+    return {
+        "kind": "list",
+        "removed": sorted(old_set - new_set),
+        "added": sorted(new_set - old_set),
+        "unchanged": sorted(old_set & new_set),
+    }
+
+
+def diff_units_field(old_units: list, new_units: list) -> dict | None:
+    if old_units == new_units:
+        return None
+    old_by_title = {u.get("title", ""): u for u in old_units if isinstance(u, dict)}
+    new_by_title = {u.get("title", ""): u for u in new_units if isinstance(u, dict)}
+    all_titles = sorted(set(old_by_title.keys()) | set(new_by_title.keys()))
+    units_diff = []
+    for title in all_titles:
+        old_u = old_by_title.get(title)
+        new_u = new_by_title.get(title)
+        if old_u and not new_u:
+            units_diff.append({"kind": "removed", "unit": old_u})
+        elif new_u and not old_u:
+            units_diff.append({"kind": "added", "unit": new_u})
+        else:
+            unit_changes = {}
+            for field in ("title", "content", "hours"):
+                ov = old_u.get(field, "")
+                nv = new_u.get(field, "")
+                if ov != nv:
+                    unit_changes[field] = {"old": ov, "new": nv}
+            if unit_changes:
+                units_diff.append({"kind": "changed", "unit": new_u, "changes": unit_changes})
+            else:
+                units_diff.append({"kind": "unchanged", "unit": new_u})
+    return {"kind": "units", "units": units_diff}
+
+
+def build_course_diff(base: dict, proposed: dict) -> dict:
+    diff = {
+        "course_title": diff_text_field(base.get("course_title", ""), proposed.get("course_title", "")),
+        "course_code": diff_text_field(base.get("course_code", ""), proposed.get("course_code", "")),
+        "program": diff_text_field(base.get("program", ""), proposed.get("program", "")),
+        "lecture_hours": diff_text_field(str(base.get("lecture_hours", "")), str(proposed.get("lecture_hours", ""))),
+        "tutorial_hours": diff_text_field(str(base.get("tutorial_hours", "")), str(proposed.get("tutorial_hours", ""))),
+        "practical_hours": diff_text_field(str(base.get("practical_hours", "")), str(proposed.get("practical_hours", ""))),
+        "self_study": diff_text_field(str(base.get("self_study", "")), str(proposed.get("self_study", ""))),
+        "credits": diff_text_field(str(base.get("credits", "")), str(proposed.get("credits", ""))),
+        "course_type": diff_text_field(base.get("course_type", ""), proposed.get("course_type", "")),
+        "semester": diff_text_field(str(base.get("semester", "")), str(proposed.get("semester", ""))),
+        "tools_languages": diff_text_field(base.get("tools_languages", ""), proposed.get("tools_languages", "")),
+        "desirable_knowledge": diff_text_field(base.get("desirable_knowledge", ""), proposed.get("desirable_knowledge", "")),
+        "prelude": diff_text_field(base.get("prelude", ""), proposed.get("prelude", "")),
+        "objectives": diff_list_field(base.get("objectives") or [], proposed.get("objectives") or []),
+        "course_outcomes": diff_list_field(base.get("course_outcomes") or [], proposed.get("course_outcomes") or []),
+        "units": diff_units_field(base.get("units") or [], proposed.get("units") or []),
+        "lab_experiments": diff_list_field(base.get("lab_experiments") or [], proposed.get("lab_experiments") or []),
+        "text_books": diff_list_field(base.get("text_books") or [], proposed.get("text_books") or []),
+        "reference_books": diff_list_field(base.get("reference_books") or [], proposed.get("reference_books") or []),
+    }
+    return diff

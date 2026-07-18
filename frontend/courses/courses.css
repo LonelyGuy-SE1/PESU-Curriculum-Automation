@@ -90,7 +90,7 @@ h1{
 
 p {
   margin: 4px 0 0;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 13px;
 }
 
@@ -170,6 +170,18 @@ th{
     background:#f8fbff;
 }
 
+td.center {
+  text-align: center;
+}
+
+.hidden-row {
+  opacity: 0.5;
+}
+
+.hidden-row td:not(.center) {
+  text-decoration: line-through;
+}
+
 .details {
   display: grid;
   gap: 8px;
@@ -183,7 +195,7 @@ th{
 
 .empty {
   padding: 20px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   text-align: center;
 }
 

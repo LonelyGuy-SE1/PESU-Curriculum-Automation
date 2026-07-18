@@ -6,41 +6,26 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
-  padding: 2rem;
-  background:
-    linear-gradient(180deg, rgba(0,55,123,.05), transparent 45%),
-    var(--page-bg);
-
+  min-height: 100dvh;
+  background: var(--page-bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: inherit;
 }
 
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-
-  padding: 2rem;
-
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  box-shadow: var(--shadow-md);
-
-  margin-bottom: 1.5rem;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px;
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
 }
 
 select,
 input,
 a {
   height: 34px;
-  border: 1px solid #9ca3af;
-  border-radius: 12px;
-  background-color: #fff;
-  color: #111827;
-  font-size: 14px;
 }
 
 select {
@@ -56,7 +41,7 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #374151;
+  color: var(--muted-foreground);
   font-size: 14px;
 }
 
@@ -71,17 +56,42 @@ a {
   margin-left: auto;
 }
 
-iframe{
-    display:block;
+.loading {
+  position: fixed;
+  inset: 52px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--background);
+  z-index: 5;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
 
-    width:100%;
-    height:78vh;
+.loading[hidden] {
+  display: none;
+}
 
-    border:none;
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
 
-    border-radius:20px;
+@keyframes spin { to { transform: rotate(360deg); } }
 
-    background:white;
+iframe {
+  display: block;
+  width: 100%;
+  height: calc(100dvh - 52px);
+  border: 0;
+}
 
-    box-shadow:var(--shadow-md);
+iframe[hidden] {
+  display: none;
 }

@@ -2,6 +2,7 @@ import json
 
 from app.services.books import parse_books
 from app.services.deterministic import compute_course_type, compute_hours, compute_program
+from app.supabase import supabase
 
 
 def _lines(value) -> list[str]:
@@ -56,7 +57,16 @@ def build_course_preview(row: dict) -> dict:
 
     practical_hours = int(hours["practical_hours"] or 0)
     status = str(row.get("status") or content.get("status") or "")
+
+    objectives = _lines(row.get("objectives") or content.get("objectives"))[:4]
+    course_outcomes = _lines(row.get("course_outcomes") or content.get("course_outcomes"))[:4]
+    units = row.get("units") or content.get("units") or []
+    lab_experiments = _lines(row.get("lab_experiments") or content.get("lab_experiments"))[:10] if practical_hours else []
+    text_books = parse_books(row.get("text_books") or content.get("text_books")) or parse_books(submission.get("text_books"))
+    reference_books = parse_books(row.get("reference_books") or content.get("reference_books")) or parse_books(submission.get("reference_books"))
+    has_content = any([objectives, course_outcomes, units, lab_experiments, text_books, reference_books])
     return {
+        "refined_id": row.get("id"),
         "course_code": str(row.get("course_code") or content.get("course_code") or ""),
         "course_title": str(row.get("course_title") or content.get("course_title") or ""),
         "program": str(program),
@@ -67,15 +77,32 @@ def build_course_preview(row: dict) -> dict:
         "credits": str(hours["credits"]),
         "semester": str(row.get("semester") or content.get("semester") or ""),
         "course_type": str(course_type),
+        "is_elective": bool(row.get("is_elective") or content.get("is_elective") or False),
         "status": status,
-        "render_detail": status != "summary_only",
+        "render_detail": status != "summary_only" and has_content,
         "tools_languages": _text(row.get("tools_languages"), content.get("tools_languages"), submission.get("preferred_tools")),
         "desirable_knowledge": _text(row.get("desirable_knowledge"), content.get("desirable_knowledge")),
         "prelude": row.get("prelude") or content.get("prelude") or "",
-        "objectives": _lines(row.get("objectives") or content.get("objectives"))[:4],
-        "course_outcomes": _lines(row.get("course_outcomes") or content.get("course_outcomes"))[:4],
-        "units": row.get("units") or content.get("units") or [],
-        "lab_experiments": _lines(row.get("lab_experiments") or content.get("lab_experiments"))[:10] if practical_hours else [],
-        "text_books": parse_books(row.get("text_books") or content.get("text_books")) or parse_books(submission.get("text_books")),
-        "reference_books": parse_books(row.get("reference_books") or content.get("reference_books")) or parse_books(submission.get("reference_books")),
+        "objectives": objectives,
+        "course_outcomes": course_outcomes,
+        "units": units,
+        "lab_experiments": lab_experiments,
+        "text_books": text_books,
+        "reference_books": reference_books,
+    }
+
+
+def build_specialization_context(academic_year: str = "") -> dict:
+    """Load specialization tracks and their elective assignments for template rendering.
+
+    academic_year is accepted for forward compatibility (multiple batches) but the
+    current single-batch deployment returns every track. Filtering by an empty or
+    mismatched year would hide all tracks, so we load them all and let the caller
+    scope by semester inside the template.
+    """
+    specs = supabase.table("specialization_definitions").select("*").order("semester").order("letter").execute().data
+    assignments = supabase.table("course_specialization_assignments").select("*").execute().data
+    return {
+        "specializations": specs,
+        "specialization_assignments": assignments,
     }

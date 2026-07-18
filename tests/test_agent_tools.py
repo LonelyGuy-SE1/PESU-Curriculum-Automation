@@ -23,6 +23,7 @@ def test_agent_tool_schemas_are_function_tools():
     assert "get_course_textbooks" in tool_names()
     assert "get_course_deterministic" in tool_names()
     assert "get_course_lab" in tool_names()
+    assert "categorize_elective" in tool_names()
     assert "get_course_fields" in tool_names()
 
 
@@ -59,6 +60,11 @@ def test_granular_course_tools_require_refined_id():
                   "get_course_deterministic", "get_course_lab"]:
         with pytest.raises(ValueError, match="refined_id is required"):
             call_tool(tool, {})
+
+
+def test_categorize_elective_requires_refined_id():
+    with pytest.raises(ValueError, match="refined_id is required"):
+        call_tool("categorize_elective", {})
 
 
 def test_get_course_fields_requires_fields_array():
