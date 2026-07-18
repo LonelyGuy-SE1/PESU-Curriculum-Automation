@@ -7,22 +7,24 @@
 body {
   margin: 0;
   min-height: 100dvh;
+  padding: 2rem;
   background: var(--page-bg);
   color: var(--text);
-  font-family: Arial, sans-serif;
 }
 
 .shell {
+  max-width: 1200px;
+  margin: 0 auto;
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 1.25rem;
 }
 
 .topbar,
 .panel {
-  border: 1px solid var(--border);
-  border-radius: 8px;
   background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
 }
 
 .topbar {
@@ -30,13 +32,14 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px;
+  padding: 1.5rem 2rem;
 }
 
 h1 {
   margin: 0;
   color: var(--pesu-blue);
-  font-size: 22px;
+  font-size: 1.5rem;
+  font-weight: 700;
 }
 
 p {
@@ -54,7 +57,7 @@ p {
 }
 
 .filters {
-  padding: 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -89,10 +92,12 @@ th {
   background: #f8fafc;
   font-size: 12px;
   text-transform: uppercase;
+  font-weight: 700;
 }
 
 .course-row {
   cursor: pointer;
+  transition: background 0.15s;
 }
 
 .course-row:hover {
@@ -109,6 +114,42 @@ td.center {
 
 .hidden-row td:not(.center) {
   text-decoration: line-through;
+}
+
+td.center input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 28px;
+  height: 16px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--muted);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  vertical-align: middle;
+}
+
+td.center input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  top: 1.5px;
+  left: 1.5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+  transition: transform 0.15s, background 0.15s;
+}
+
+td.center input[type="checkbox"]:checked {
+  background: var(--pesu-orange);
+  border-color: var(--pesu-orange);
+}
+
+td.center input[type="checkbox"]:checked::before {
+  transform: translateX(12px);
+  background: white;
 }
 
 .details {
@@ -129,6 +170,10 @@ td.center {
 }
 
 @media (max-width: 760px) {
+  body {
+    padding: 1rem;
+  }
+
   .topbar,
   .actions,
   .filters {

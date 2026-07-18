@@ -7,6 +7,7 @@
 body {
   margin: 0;
   min-height: 100dvh;
+  padding: 2rem;
   background: var(--page-bg);
   color: var(--text);
   font-family: inherit;
@@ -16,10 +17,13 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 52px;
-  padding: 8px 12px;
-  background: var(--background);
-  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  padding: 1rem 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 1.25rem;
 }
 
 select,
@@ -88,8 +92,11 @@ a {
 iframe {
   display: block;
   width: 100%;
-  height: calc(100dvh - 52px);
+  height: calc(100dvh - 140px);
   border: 0;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
 }
 
 iframe[hidden] {

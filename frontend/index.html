@@ -11,6 +11,7 @@
     <main class="home-shell">
       <section class="home-panel">
         <h1>PESU Curriculum Automation</h1>
+        <div class="rule"></div>
         <div class="year-bar">
           <label class="year-label" for="curriculum-year">Academic Year</label>
           <input id="curriculum-year" type="text" inputmode="numeric" placeholder="2025-2026" />
@@ -18,11 +19,26 @@
           <span class="year-status" id="year-status"></span>
         </div>
         <nav class="surface-grid" aria-label="Curriculum surfaces">
-          <a class="surface-link" href="form/">Raw Data</a>
-          <a class="surface-link" href="courses/">Courses</a>
-          <a class="surface-link" href="preview/">Preview</a>
-          <a class="surface-link" href="live-editor/">Live Editor</a>
-          <a class="surface-link" href="versions/">Versions</a>
+          <a class="surface-link" href="form/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Input Form
+          </a>
+          <a class="surface-link" href="courses/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5c-.8 0-1.5-.7-1.5-1.5z"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5c.8 0 1.5-.7 1.5-1.5z"/></svg>
+            Courses
+          </a>
+          <a class="surface-link" href="preview/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            Preview
+          </a>
+          <a class="surface-link" href="live-editor/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4.2-1.2L19 8c.8-.8.8-2 0-2.8l-.2-.2c-.8-.8-2-.8-2.8 0L5.2 15.8 4 20z"/><path d="M14 6.5l3.5 3.5"/></svg>
+            Live Editor
+          </a>
+          <a class="surface-link" href="versions/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+            Versions
+          </a>
         </nav>
       </section>
     </main>
@@ -31,7 +47,11 @@
       const yearInput = document.getElementById("curriculum-year");
       const saveBtn = document.getElementById("save-year");
       const yearStatus = document.getElementById("year-status");
-      yearInput.value = localStorage.getItem("curriculumYear") || "";
+      const DEFAULT_YEAR = "2025-2026";
+      yearInput.value = localStorage.getItem("curriculumYear") || DEFAULT_YEAR;
+      if (!localStorage.getItem("curriculumYear")) {
+        localStorage.setItem("curriculumYear", DEFAULT_YEAR);
+      }
       saveBtn.addEventListener("click", () => {
         const val = yearInput.value.trim();
         if (val) localStorage.setItem("curriculumYear", val);

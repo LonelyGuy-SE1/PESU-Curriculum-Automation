@@ -60,7 +60,7 @@ async function loadSemester(sem) {
   statusText.textContent = "Loading...";
 
   if (!/^\d{4}-\d{4}$/.test(yearValue())) {
-    clearPreview("Enter academic year as YYYY-YYYY.");
+    clearPreview("Set academic year on the dashboard to preview.");
     return;
   }
 

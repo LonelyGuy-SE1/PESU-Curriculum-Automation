@@ -13,9 +13,9 @@
   max-width: 400px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: 0 4px 24px rgba(0, 55, 123, 0.08);
+  border-radius: 20px;
+  padding: 2.5rem;
+  box-shadow: var(--shadow-md);
 }
 
 .auth-header {
@@ -113,9 +113,15 @@
 }
 
 .btn-primary {
-  border-color: var(--pesu-blue);
-  background: var(--pesu-blue);
+  border: none;
+  background: var(--pesu-orange);
   color: #fff;
+  border-radius: 10px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-primary:hover {
+  border-color: color-mix(in srgb, var(--pesu-orange) 80%, black);
 }
 
 .btn-block {
