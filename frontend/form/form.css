@@ -114,13 +114,11 @@ button {
   font-weight: 600;
   cursor: pointer;
   margin-top: 1rem;
-  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 button:hover {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  border-color: color-mix(in srgb, var(--pesu-orange) 80%, black);
 }
 
 button:disabled {

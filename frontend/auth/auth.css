@@ -117,13 +117,11 @@
   background: var(--pesu-orange);
   color: #fff;
   border-radius: 10px;
-  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .btn-primary:hover {
-  background: #e55d00;
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  border-color: color-mix(in srgb, var(--pesu-orange) 80%, black);
 }
 
 .btn-block {

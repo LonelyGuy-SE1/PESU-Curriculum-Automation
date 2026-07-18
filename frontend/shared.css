@@ -87,6 +87,7 @@ a.button-link {
 
 select {
   appearance: none;
+  min-width: 160px;
   padding: 0 34px 0 10px;
   background-image:
     linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
@@ -116,14 +117,12 @@ a.button-link {
   text-decoration: none;
   cursor: pointer;
   font-weight: 500;
-  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 button:hover,
 a.button-link:hover {
-  background: var(--accent);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  border-color: var(--pesu-orange);
 }
 
 button.primary,
@@ -135,7 +134,7 @@ a.button-link.primary {
 
 button.primary:hover,
 a.button-link.primary:hover {
-  background: color-mix(in srgb, var(--primary) 90%, black);
+  border-color: color-mix(in srgb, var(--primary) 70%, white);
 }
 
 button.danger {
@@ -145,7 +144,7 @@ button.danger {
 }
 
 button.danger:hover {
-  background: color-mix(in srgb, var(--destructive) 90%, black);
+  border-color: color-mix(in srgb, var(--destructive) 70%, white);
 }
 
 button:disabled,

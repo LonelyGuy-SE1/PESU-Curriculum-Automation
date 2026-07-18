@@ -105,7 +105,7 @@ h1 {
   text-decoration: none;
   font-size: 0.95rem;
   font-weight: 600;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .surface-link::before {
@@ -134,7 +134,6 @@ h1 {
 .surface-link:hover {
   border-color: var(--pesu-orange);
   box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
 }
 
 .surface-link:hover::before {

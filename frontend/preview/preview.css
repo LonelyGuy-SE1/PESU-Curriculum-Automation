@@ -22,7 +22,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   margin-bottom: 1.25rem;
 }
 
@@ -96,7 +96,7 @@ iframe {
   border: 0;
   border-radius: 16px;
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
 }
 
 iframe[hidden] {

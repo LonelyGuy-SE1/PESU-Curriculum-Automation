@@ -93,7 +93,7 @@ def parse_course_code(code: str) -> ParsedCourseCode:
 
 
 class CourseSubmission(BaseModel):
-    faculty_email: str = Field(min_length=3, max_length=254)
+    faculty_email: str = Field(default="", max_length=254)
     course_title: str = Field(min_length=3, max_length=150)
     course_code: str = Field(min_length=8, max_length=12)  # e.g., UE25CS242B
     raw_course_content: str = Field(min_length=50)
