@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -125,9 +126,12 @@ def test_form_has_auth_guard():
 
 
 def test_shared_css_has_inter_font():
+    import re
+
     css = Path("frontend/shared.css").read_text()
     assert "Inter" in css
-    assert "fonts.googleapis.com" in css
+    urls = re.findall(r"url\(\s*['\"]?([^'\"\)]+)['\"]?\s*\)", css)
+    assert any(urlparse(u).hostname == "fonts.googleapis.com" for u in urls)
 
 
 def test_homepage_has_default_year():
