@@ -2,6 +2,8 @@ import logging
 import re
 
 from app.supabase import first_row, supabase
+
+logger = logging.getLogger(__name__)
 from app.services.books import parse_books, raw_book_section
 from app.services.deterministic import compute_hours, compute_program, compute_course_type
 from app.services.elective_categorization import categorize_refined_elective, is_elective_course
@@ -421,14 +423,17 @@ def build_refined_payload(sub: dict, out: dict, prior_courses: list[str] | None 
     objectives = _lines(out.get("objectives"))[:4]
     course_outcomes = _lines(out.get("course_outcomes"))[:4] or objectives
 
+    from app.services.elective_categorization import is_elective_course
+
+    code = _course_code(raw_content) or sub["course_code"]
     return {
         "submission_id": sub["id"],
         "semester": int(sub["semester"]),
-        "course_code": _course_code(raw_content) or sub["course_code"],
+        "course_code": code,
         "course_title": _text(out.get("course_title"), sub["course_title"]),
         "program": compute_program(sub["target_department"]),
         "course_type": compute_course_type(sub["credit_category"]),
-        "is_elective": is_elective_course({"course_code": _course_code(raw_content) or sub["course_code"], "semester": sub["semester"]}),
+        "is_elective": is_elective_course({"course_code": code, "semester": sub["semester"]}),
         **det,
         "prelude": _text(out.get("prelude"), f"This course covers {sub['course_title'].strip()}."),
         "objectives": objectives,
@@ -498,6 +503,13 @@ Preferred Tools / Languages:
             categorize_refined_elective(int(refined_id))
         except Exception:
             # Classification is isolated from the refinement outcome and can be rerun.
+            logger.exception("Elective categorization failed for refined_id=%s", refined_id)
+
+    if merged["is_elective"]:
+        try:
+            from app.services.elective_categorization import categorize_refined_elective
+            categorize_refined_elective(int(refined_id))
+        except Exception:
             logger.exception("Elective categorization failed for refined_id=%s", refined_id)
 
     return merged
