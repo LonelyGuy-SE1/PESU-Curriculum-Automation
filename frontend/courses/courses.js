@@ -134,9 +134,16 @@ async function deleteCourse(course) {
   render();
 }
 
+function yearParam(base) {
+  const y = localStorage.getItem("curriculumYear") || "";
+  if (!y) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}curriculum_year=${encodeURIComponent(y)}`;
+}
+
 async function loadCourses() {
   setStatus("Loading courses...");
-  const response = await fetch("/api/courses");
+  const response = await fetch(yearParam("/api/courses"));
   if (!response.ok) throw new Error("Unable to load courses");
   const body = await response.json();
   courses = body.courses || [];

@@ -18,11 +18,11 @@ def client():
 
 FRONTEND_PAGES = {
     "/": "PESU Curriculum Automation",
-    "/form/": "Course Submission",
-    "/courses/": "Course Management",
-    "/preview/": "Curriculum Preview",
+    "/form/": "Submit Course",
+    "/courses/": "Courses",
+    "/preview/": "Preview",
     "/live-editor/": "Agentic Editor",
-    "/versions/": "Curriculum Versions",
+    "/versions/": "Version History",
 }
 
 

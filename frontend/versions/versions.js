@@ -7,9 +7,11 @@ const emptyState = document.getElementById("empty-state");
 const sidebar = document.getElementById("sidebar");
 const sidebarOverlay = document.getElementById("sidebar-overlay");
 const mobileMenuBtn = document.getElementById("mobile-menu");
-const collapseAllBtn = document.getElementById("collapse-all");
-const expandAllBtn = document.getElementById("expand-all");
+const toggleGroupsBtn = document.getElementById("toggle-groups");
 const showEmptyToggle = document.getElementById("show-empty");
+const baseVersionSelect = document.getElementById("base-version");
+const compareVersionSelect = document.getElementById("compare-version");
+const compareBtn = document.getElementById("compare-btn");
 
 function setStatus(text, kind = "") {
   statusText.textContent = text || "";
@@ -22,6 +24,7 @@ function icon(name) {
     chevron: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>',
     folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>',
     edit: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+    trash: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
   };
   return icons[name] || "";
 }
@@ -132,10 +135,19 @@ function renderVersionTree(groups) {
         startEdit(v, item);
       });
 
-      item.append(info, editBtn);
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "icon-btn delete-btn";
+      deleteBtn.title = "Delete version";
+      deleteBtn.innerHTML = icon("trash");
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteVersion(v.id, v.name || `Version ${v.id}`);
+      });
+
+      item.append(info, editBtn, deleteBtn);
 
       const activate = (e) => {
-        if (e.target.closest(".edit-btn")) return;
+        if (e.target.closest(".edit-btn") || e.target.closest(".delete-btn")) return;
         loadVersion(v.id);
       };
       item.addEventListener("click", activate);
@@ -209,6 +221,25 @@ async function saveEdit(versionId, name, academicYear, formEl) {
   }
 }
 
+async function deleteVersion(versionId, name) {
+  if (!await showConfirm(`Delete "${name}"? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/versions/${versionId}`, { method: "DELETE" });
+    if (!res.ok) throw new Error((await res.json()).detail || "Delete failed");
+    if (String(activeVersionId) === String(versionId)) {
+      activeVersionId = null;
+      viewer.src = "";
+      emptyState.hidden = false;
+      viewer.hidden = true;
+      openEditor.hidden = true;
+    }
+    setStatus("Deleted.", "ready");
+    await loadVersions();
+  } catch (e) {
+    setStatus(e.message, "error");
+  }
+}
+
 function startGroupEdit(year, versions, labelEl, btnEl) {
   if (labelEl.querySelector("input")) return;
   const prevText = labelEl.textContent;
@@ -264,6 +295,7 @@ async function loadVersions() {
     const body = await res.json();
     allVersions = body.versions || [];
     renderFilteredVersions();
+    populateCompareSelects();
   } catch (e) {
     setStatus(e.message, "error");
   }
@@ -281,11 +313,52 @@ function renderFilteredVersions() {
   }
 }
 
+function populateCompareSelects() {
+  const options = allVersions.map((v) => `<option value="${v.id}">${v.name || `Snapshot ${v.id}`}</option>`).join("");
+  const placeholder = '<option value="">Select version</option>';
+  baseVersionSelect.innerHTML = placeholder + options;
+  compareVersionSelect.innerHTML = placeholder + options;
+}
+
+if (compareBtn) {
+  compareBtn.addEventListener("click", () => {
+    const id1 = baseVersionSelect.value;
+    const id2 = compareVersionSelect.value;
+    if (!id1 || !id2) {
+      setStatus("Select both versions to compare.", "error");
+      return;
+    }
+    if (id1 === id2) {
+      setStatus("Select two different versions.", "error");
+      return;
+    }
+    const v1 = allVersions.find((v) => String(v.id) === id1);
+    const v2 = allVersions.find((v) => String(v.id) === id2);
+    emptyState.hidden = true;
+    viewerLoading.hidden = false;
+    viewer.hidden = true;
+
+    const onLoad = () => {
+      viewerLoading.hidden = true;
+      viewer.hidden = false;
+      viewer.removeEventListener("load", onLoad);
+    };
+    viewer.addEventListener("load", onLoad);
+    viewer.src = `/api/versions/${id1}/diff/${id2}`;
+    openEditor.hidden = true;
+    setStatus(`Comparing: ${v1?.name || id1} vs ${v2?.name || id2}`);
+    closeSidebar();
+  });
+}
+
 let loadSeq = 0;
 
 function loadVersion(versionId) {
   activeVersionId = String(versionId);
   versionList.querySelectorAll(".tree-item").forEach((el) => el.classList.toggle("active", el.dataset.versionId === String(versionId)));
+
+  if (baseVersionSelect) baseVersionSelect.value = "";
+  if (compareVersionSelect) compareVersionSelect.value = "";
 
   emptyState.hidden = true;
   viewerLoading.hidden = false;
@@ -323,7 +396,8 @@ function loadVersion(versionId) {
   viewer.src = `/api/versions/${versionId}/preview?diff=1`;
   openEditor.href = `/live-editor/?version=${versionId}`;
   openEditor.hidden = false;
-  setStatus(`Viewing diff for snapshot ${versionId}`);
+  const v = allVersions.find((x) => String(x.id) === String(versionId));
+  setStatus(`Comparing: ${v?.name || `Version ${versionId}`} against current curriculum`);
   closeSidebar();
 }
 
@@ -340,14 +414,15 @@ function openSidebar() {
 if (mobileMenuBtn) mobileMenuBtn.addEventListener("click", () => sidebar.classList.contains("open") ? closeSidebar() : openSidebar());
 if (sidebarOverlay) sidebarOverlay.addEventListener("click", closeSidebar);
 
-if (collapseAllBtn) collapseAllBtn.addEventListener("click", () => {
-  versionList.querySelectorAll(".tree-group").forEach((g) => g.classList.add("collapsed"));
-  versionList.querySelectorAll(".tree-group-header").forEach((h) => h.setAttribute("aria-expanded", "false"));
-});
-
-if (expandAllBtn) expandAllBtn.addEventListener("click", () => {
-  versionList.querySelectorAll(".tree-group").forEach((g) => g.classList.remove("collapsed"));
-  versionList.querySelectorAll(".tree-group-header").forEach((h) => h.setAttribute("aria-expanded", "true"));
+if (toggleGroupsBtn) toggleGroupsBtn.addEventListener("click", () => {
+  const workspace = document.querySelector(".workspace");
+  const collapsed = workspace.classList.toggle("sidebar-collapsed");
+  toggleGroupsBtn.dataset.collapsed = String(collapsed);
+  if (collapsed) {
+    toggleGroupsBtn.title = "Show sidebar";
+  } else {
+    toggleGroupsBtn.title = "Hide sidebar";
+  }
 });
 
 if (showEmptyToggle) showEmptyToggle.addEventListener("change", renderFilteredVersions);

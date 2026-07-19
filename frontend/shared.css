@@ -229,3 +229,29 @@ a.button-link:focus-visible {
   border-radius: 999px;
   background: var(--pesu-orange);
 }
+
+.home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--muted-foreground);
+  text-decoration: none;
+  border-radius: 10px;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.home-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.home-btn:hover {
+  background: var(--accent);
+  color: var(--foreground);
+  border-color: var(--border-strong);
+}

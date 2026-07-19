@@ -115,11 +115,11 @@ def test_frontend_routes_mount(monkeypatch):
     client = TestClient(app)
     expected = {
         "/": "PESU Curriculum Automation",
-        "/form/": "Course Submission",
-        "/courses/": "Course Management",
-        "/preview/": "Curriculum Preview",
+        "/form/": "Submit Course",
+        "/courses/": "Courses",
+        "/preview/": "Preview",
         "/live-editor/": "Agentic Editor",
-        "/versions/": "Curriculum Versions",
+        "/versions/": "Version History",
     }
 
     for path, title in expected.items():

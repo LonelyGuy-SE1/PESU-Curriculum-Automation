@@ -28,7 +28,7 @@ body {
 select,
 input,
 a {
-  height: 34px;
+  min-height: 34px;
 }
 
 select {

@@ -7,10 +7,14 @@
     <title>Agentic Editor - PESU</title>
     <link rel="stylesheet" href="live-editor.css" />
     <link rel="stylesheet" href="../shared/dialog.css" />
+    <script src="/shared/auth-guard.js"></script>
     <script src="../shared/dialog.js"></script>
   </head>
   <body>
     <header class="toolbar">
+      <a href="/" class="home-btn" title="Home">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </a>
       <div class="toolbar-group course-controls">
         <select id="semester" aria-label="Semester">
           <option value="1">Semester 1</option>
@@ -29,10 +33,11 @@
         </select>
         <button id="preview" type="button">Open</button>
         <span id="version-display" class="version-display" hidden></span>
+        <span id="doc-display" class="doc-display" hidden></span>
       </div>
 
       <div class="toolbar-group version-controls">
-        <input id="version-name" type="text" aria-label="Version name" />
+        <input id="version-name" type="text" aria-label="Version name" placeholder="Version name" />
         <button id="save-version" type="button">Save Version</button>
         <select id="version-select" aria-label="Saved version"></select>
         <button id="restore-version" type="button">Restore</button>
@@ -84,7 +89,7 @@
                 </svg>
               </button>
             </div>
-            <input id="chat-title" type="text" aria-label="Agent title" hidden />
+            <input id="chat-title" type="text" aria-label="Agent title" placeholder="Thread title" hidden />
             <button class="danger" id="delete-chat" type="button">Delete</button>
             <button id="new-chat" type="button">New</button>
             <div class="context-info" id="context-info">
@@ -99,7 +104,7 @@
           </div>
           <div class="composer">
             <div class="attachments" id="draft-attachments"></div>
-            <textarea id="message" aria-label="Message"></textarea>
+            <textarea id="message" aria-label="Message" placeholder="Ask the agent anything..."></textarea>
             <div class="composer-actions">
               <button id="attach" type="button">Attach</button>
               <input id="files" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.png,.jpg,.jpeg" hidden />
@@ -110,7 +115,7 @@
         </section>
 
         <section class="panel fields-panel" id="fields-panel" role="tabpanel" aria-labelledby="fields-tab">
-          <textarea id="editor" spellcheck="false" aria-label="Course fields"></textarea>
+          <textarea id="editor" spellcheck="false" aria-label="Course fields" placeholder="Course JSON fields appear here..."></textarea>
           <div class="field-actions">
             <button id="draft" type="button">Create Draft</button>
             <button class="primary" id="save" type="button">Save</button>
@@ -152,7 +157,6 @@
       </div>
     </div>
 
-    <script src="/shared/auth-guard.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js" integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js" integrity="sha384-piCcpDdJ7qVeK4Tv8Z6Hpcr3ZBIgP16TxQTPVfsLFdZ5uDgwc3Y8Ho7oUnqf12qu" crossorigin="anonymous"></script>
     <script src="live-editor.js" defer></script>

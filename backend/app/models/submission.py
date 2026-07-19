@@ -29,15 +29,18 @@ def parse_course_code(code: str) -> ParsedCourseCode:
     
     year, dept, num_str, suffix = match.groups()
     num = int(num_str)
-    
-    # Extract semester from number (hundreds digit)
-    semester_digit = num // 100
-    base_sem = semester_digit
-    
-    # Determine if even semester from suffix
-    # B, BAX, BBX, XB, XX = even semester
+
+    # Number format: [semester_group][credits][sequence]
+    # e.g. 151 -> group=1, credits=5, seq=1
+    # e.g. 242 -> group=2, credits=4, seq=2
+    semester_group = num // 100
+    credits_digit = (num // 10) % 10
+    credit_category = str(credits_digit) if credits_digit in (0, 2, 4, 5) else "4"
+
+    # Semester: each group covers 2 semesters.
+    # A/B suffix determines odd/even within the group.
     is_even = suffix.startswith("B") or suffix.endswith("B") or suffix in ("XX", "XB")
-    semester = str(base_sem + (1 if is_even else 0))
+    semester = str(semester_group * 2 - 1 + (1 if is_even else 0))
     
     # Map department to offering_department
     dept_map = {
@@ -68,16 +71,6 @@ def parse_course_code(code: str) -> ParsedCourseCode:
     }
     target_dept = target_map.get(dept, "CSE")
     
-    # Credit category from suffix pattern
-    if suffix in ("A", "B"):
-        credit_category = "4"
-    elif suffix in ("A*", "B*"):
-        credit_category = "0"
-    elif suffix.endswith("XX") or suffix.endswith("AX") or suffix.endswith("BX") or suffix in ("AXX", "ABX", "BAX", "BBX"):
-        credit_category = "5"
-    else:
-        credit_category = "4"
-    
     is_lateral = "*" in suffix
     
     return ParsedCourseCode(
@@ -100,8 +93,9 @@ class CourseSubmission(BaseModel):
     text_books: str = Field(min_length=5)
     reference_books: str = ""
     preferred_tools: str = ""
+    credit_category: str = ""
 
-    @field_validator("faculty_email", "course_title", "course_code", "raw_course_content", "text_books", "reference_books", "preferred_tools", mode="before")
+    @field_validator("faculty_email", "course_title", "course_code", "raw_course_content", "text_books", "reference_books", "preferred_tools", "credit_category", mode="before")
     @classmethod
     def strip(cls, value):
         return value.strip() if isinstance(value, str) else value

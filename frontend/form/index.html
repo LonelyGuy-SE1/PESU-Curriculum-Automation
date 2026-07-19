@@ -4,57 +4,74 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="../images/SE1128.png" />
-    <title>Course Submission - PESU</title>
+    <title>Submit Course - PESU</title>
     <link rel="stylesheet" href="form.css" />
+    <script src="/shared/auth-guard.js"></script>
     <script src="form.js" defer></script>
   </head>
   <body>
-    <div class="container">
-      <div class="card">
-        <h1>Course Submission</h1>
-        <div class="rule"></div>
-        <p class="subtitle">Fill in the course details below. Course code auto-fills semester, department, and credits.</p>
+    <header class="toolbar">
+      <a href="/" class="home-btn" title="Home">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </a>
+      <span class="toolbar-title">Submit Course</span>
+      <span class="toolbar-sep"></span>
+      <span class="subtitle">Fill the mandatory fields and our agent will extrapolate the other content for you.</span>
+    </header>
 
-        <form id="course-form">
-          <fieldset>
-            <legend>Faculty</legend>
+    <main class="form-grid">
+      <form id="course-form" class="form-card">
+        <h2>Faculty</h2>
+        <label for="faculty_email">Email <span class="optional">(optional)</span></label>
+        <input type="email" id="faculty_email" name="faculty_email" placeholder="admin@pes.edu" />
+      </form>
 
-            <label for="faculty_email">Email <span class="optional">(optional)</span></label>
-            <input type="email" id="faculty_email" name="faculty_email" placeholder="admin@pes.edu" />
-          </fieldset>
+      <section class="form-card">
+        <h2>Course Details</h2>
 
-          <fieldset>
-            <legend>Course</legend>
+        <label for="course_code">Course Code <span class="hint">(e.g. UE25CS242B)</span></label>
+        <input type="text" id="course_code" name="course_code" required placeholder="UE25CS242B" form="course-form" />
+        <div id="code-preview" class="code-preview hidden"></div>
 
-            <label for="course_code">Course Code <span class="hint">(e.g. UE25CS242B)</span></label>
-            <input type="text" id="course_code" name="course_code" required placeholder="UE25CS242B" />
-            <div id="code-preview" class="code-preview hidden"></div>
+        <label for="course_title">Course Title</label>
+        <input type="text" id="course_title" name="course_title" required placeholder="Operating Systems" form="course-form" />
 
-            <label for="course_title">Course Title</label>
-            <input type="text" id="course_title" name="course_title" required placeholder="Operating Systems" />
+        <label for="credit_category">Credit Category</label>
+        <select id="credit_category" name="credit_category" form="course-form">
+          <option value="4">4 credits - Core Course (L/T/P: 4/0/0)</option>
+          <option value="5">5 credits - Lab Integrated (L/T/P: 4/0/2)</option>
+          <option value="2">2 credits - Core Theory (L/T/P: 2/0/0)</option>
+          <option value="0">0 credits - Foundation (L/T/P: 0/0/0)</option>
+        </select>
+        <span class="hint">Override if the code does not match your intended category.</span>
 
-            <label for="raw_course_content">Course Content</label>
-            <textarea id="raw_course_content" name="raw_course_content" rows="8" required placeholder="Unit 1: ...&#10;Unit 2: ..."></textarea>
-            <span class="hint">Topics, units, or rough syllabus.</span>
+        <label for="raw_course_content">Course Content</label>
+        <textarea id="raw_course_content" name="raw_course_content" rows="5" required placeholder="Unit 1: ...&#10;Unit 2: ..." form="course-form"></textarea>
+        <span class="hint">Topics, units, or rough syllabus.</span>
+      </section>
 
-            <label for="text_books">Textbook References</label>
-            <textarea id="text_books" name="text_books" rows="4" required></textarea>
+      <section class="form-card">
+        <h2>References</h2>
 
-            <label for="reference_books">Other Suggested Reference Books <span class="optional">(optional)</span></label>
-            <textarea id="reference_books" name="reference_books" rows="4"></textarea>
+        <label for="text_books">Textbook References</label>
+        <textarea id="text_books" name="text_books" rows="3" required placeholder="e.g. Operating System Concepts, Silberschatz et al." form="course-form"></textarea>
 
-            <label for="preferred_tools">Preferred Tools / Languages <span class="optional">(optional)</span></label>
-            <textarea id="preferred_tools" name="preferred_tools" rows="3"></textarea>
-          </fieldset>
+        <label for="reference_books">Other Reference Books <span class="optional">(optional)</span></label>
+        <textarea id="reference_books" name="reference_books" rows="3" placeholder="e.g. Modern Operating Systems, Tanenbaum" form="course-form"></textarea>
 
-          <button type="submit" id="submit-btn">Submit Course</button>
-          <a class="form-link" href="../courses/">Manage Courses</a>
-          <a class="form-link" href="../preview/">View Preview</a>
-        </form>
+        <label for="preferred_tools">Preferred Tools / Languages <span class="optional">(optional)</span></label>
+        <textarea id="preferred_tools" name="preferred_tools" rows="2" placeholder="e.g. Python, Jupyter, Git" form="course-form"></textarea>
+      </section>
+    </main>
 
-        <div id="result" class="hidden"></div>
+    <footer class="form-footer">
+      <button type="submit" id="submit-btn" class="primary" form="course-form">Submit Course</button>
+      <div class="form-links">
+        <a class="form-link button-link" href="../courses/">Manage Courses</a>
+        <a class="form-link button-link" href="../preview/">View Preview</a>
       </div>
-    </div>
-    <script src="/shared/auth-guard.js"></script>
+    </footer>
+
+    <div id="result" class="hidden"></div>
   </body>
 </html>

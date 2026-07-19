@@ -77,9 +77,25 @@ h1 {
 }
 
 .year-status {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.year-status[hidden] {
+  display: none;
+}
+
+.year-status.ready {
+  border-color: var(--success);
+  background: var(--success-bg);
   color: var(--success);
-  font-weight: 600;
-  font-size: 0.8rem;
 }
 
 .surface-grid {

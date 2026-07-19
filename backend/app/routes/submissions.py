@@ -22,11 +22,16 @@ def refine_later(submission_id: int) -> None:
 def receive(data: CourseSubmission, background_tasks: BackgroundTasks):
     parsed = parse_course_code(data.course_code)
     payload = data.model_dump()
+    user_credit = (payload.get("credit_category") or "").strip()
+    if user_credit in ("0", "2", "4", "5"):
+        credit_cat = user_credit
+    else:
+        credit_cat = parsed.credit_category
     payload.update({
         "offering_department": parsed.offering_dept,
         "target_department": parsed.target_dept,
         "semester": int(parsed.semester),
-        "credit_category": parsed.credit_category,
+        "credit_category": credit_cat,
         "status": "pending",
     })
     try:

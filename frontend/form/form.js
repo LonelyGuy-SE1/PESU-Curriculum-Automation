@@ -1,6 +1,7 @@
 const form = document.getElementById("course-form");
 const codeInput = document.getElementById("course_code");
 const previewDiv = document.getElementById("code-preview");
+const creditSelect = document.getElementById("credit_category");
 const submitBtn = document.getElementById("submit-btn");
 const resultDiv = document.getElementById("result");
 
@@ -21,14 +22,13 @@ function parseCode(code) {
   if (!m) return null;
   const [, year, dept, numStr, suffix] = m;
   const num = parseInt(numStr, 10);
-  const baseSem = Math.floor(num / 100);
+  const semesterGroup = Math.floor(num / 100);
+  const creditsDigit = Math.floor(num / 10) % 10;
+  const credit = [0, 2, 4, 5].includes(creditsDigit) ? String(creditsDigit) : "4";
   const isEven = suffix.startsWith("B") || suffix.endsWith("B") || suffix === "XX" || suffix === "XB";
-  const semester = baseSem + (isEven ? 1 : 0);
+  const semester = semesterGroup * 2 - 1 + (isEven ? 1 : 0);
   const offering = DEPT_OFFERING[dept] || "CS";
   const target = DEPT_TARGET[dept] || "CSE";
-  let credit = "4";
-  if (suffix === "A*" || suffix === "B*") credit = "0";
-  else if (suffix.endsWith("XX") || suffix.endsWith("AX") || suffix.endsWith("BX") || ["AXX","ABX","BAX","BBX"].includes(suffix)) credit = "5";
   const isLateral = suffix.includes("*");
   return { year, dept, semester, offering, target, credit, isLateral, baseCode: c };
 }
@@ -51,6 +51,7 @@ function updatePreview() {
     <span class="badge">Credits: ${parsed.credit}</span>
     ${parsed.isLateral ? '<span class="badge lateral">Lateral Entry</span>' : ''}
   `;
+  creditSelect.value = parsed.credit;
 }
 
 codeInput.addEventListener("input", updatePreview);
@@ -66,7 +67,6 @@ form.addEventListener("submit", async (e) => {
   const fd = new FormData(form);
   const data = Object.fromEntries(fd.entries());
 
-  // Validate course code
   const parsed = parseCode(data.course_code);
   if (!parsed) {
     showError("Invalid course code format. Use format like UE25CS242B");
@@ -74,6 +74,11 @@ form.addEventListener("submit", async (e) => {
     submitBtn.textContent = "Submit Course";
     return;
   }
+
+  data.semester = String(parsed.semester);
+  data.offering_department = parsed.offering;
+  data.target_department = parsed.target;
+  data.credit_category = creditSelect.value || parsed.credit;
 
   try {
     const res = await fetch("/api/submissions", {

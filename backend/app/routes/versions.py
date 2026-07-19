@@ -357,3 +357,66 @@ def preview_version(version_id: int, diff: bool = Query(False), curriculum_year:
     )
     cache.put(cache_key, html, ttl=120)
     return HTMLResponse(html, headers={"Cache-Control": "public, max-age=30"})
+
+
+@router.delete("/versions/{version_id}")
+def delete_version(version_id: int):
+    _version(version_id)
+    try:
+        supabase.table("finalized_submissions").delete().eq("curriculum_version_id", version_id).execute()
+        supabase.table("curriculum_versions").delete().eq("id", version_id).execute()
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
+    cache.invalidate("versions_list")
+    cache.invalidate("ver_preview:")
+    return {"message": "Version deleted"}
+
+
+@router.get("/versions/{version_id1}/diff/{version_id2}")
+def diff_two_versions(version_id1: int, version_id2: int, curriculum_year: str | None = Query(None)):
+    cy = selected_curriculum_year(curriculum_year)
+    cache_key = f"ver_diff:{version_id1}:{version_id2}:{cy}"
+    cached = cache.get(cache_key)
+    if cached:
+        return HTMLResponse(cached, headers={"Cache-Control": "public, max-age=30"})
+    try:
+        v1 = _version(version_id1)
+        v2 = _version(version_id2)
+        fs1 = (
+            supabase.table("finalized_submissions")
+            .select("refined_id,course_json")
+            .eq("curriculum_version_id", version_id1)
+            .execute()
+            .data
+        )
+        fs2 = (
+            supabase.table("finalized_submissions")
+            .select("refined_id,course_json")
+            .eq("curriculum_version_id", version_id2)
+            .execute()
+            .data
+        )
+    except APIError as exc:
+        raise database_http_exception(exc) from exc
+
+    map1 = {row["refined_id"]: row["course_json"] for row in fs1}
+    map2 = {row["refined_id"]: row["course_json"] for row in fs2}
+    all_ids = sorted(set(map1.keys()) | set(map2.keys()))
+
+    course_diffs = []
+    for rid in all_ids:
+        base = map1.get(rid) or {}
+        proposed = map2.get(rid) or {}
+        if base == proposed:
+            continue
+        course_diff = build_course_diff(base, proposed)
+        if any(v is not None for v in course_diff.values()):
+            course_diffs.append({"base": base, "proposed": proposed, "course_diff": course_diff})
+
+    html = templates.get_template("jinja_diff.html").render(
+        course_diffs=course_diffs,
+        curriculum_year=cy,
+        asset_root="/",
+    )
+    cache.put(cache_key, html, ttl=120)
+    return HTMLResponse(html, headers={"Cache-Control": "public, max-age=30"})

@@ -5,7 +5,7 @@
     <style>
       @page { size: A4; margin: 14mm 12mm 18mm; }
       * { box-sizing: border-box; }
-      body { margin: 0; color: #000; font-family: Calibri, Arial, sans-serif; font-size: 10pt; line-height: 1.2; }
+      body { margin: 0; padding: 16px; color: #000; font-family: Calibri, Arial, sans-serif; font-size: 10pt; line-height: 1.2; }
       .course + .course { break-before: page; page-break-before: always; }
       .letterhead { display: flex; align-items: center; justify-content: center; gap: 12pt; margin-bottom: 10pt; }
       .seal { width: 41px; height: auto; }
@@ -60,7 +60,7 @@
   <body>
     <div class="footer-bar"></div>
 
-    {% macro diff_inline(diff) %}
+    {% macro diff_inline(diff, fallback="") %}
       {% if diff %}
         {% if diff.old != "" %}
         <div class="diff-removed"><span class="diff-sign">&minus;</span><span class="diff-value">{{ diff.old }}</span></div>
@@ -69,7 +69,7 @@
         <div class="diff-added"><span class="diff-sign">+</span><span class="diff-value">{{ diff.new }}</span></div>
         {% endif %}
       {% else %}
-        <div class="diff-unchanged"></div>
+        {{ fallback }}
       {% endif %}
     {% endmacro %}
 
@@ -178,7 +178,7 @@
             <th>Course Code</th>
             {{ diff_cell(course_diff.course_code, proposed_course.course_code | course_code_for_year(proposed_course.semester, curriculum_year)) }}
             <th>Course Title</th>
-            <td colspan="5">{{ diff_inline(course_diff.course_title) }}</td>
+            <td colspan="5">{{ diff_inline(course_diff.course_title, proposed_course.course_title) }}</td>
           </tr>
           <tr>
             <th rowspan="2">Program</th>
@@ -203,7 +203,7 @@
             <th>AI Tools / Tools / Languages</th>
             {{ diff_cell(course_diff.tools_languages, proposed_course.tools_languages) }}
             <th>Desirable Knowledge</th>
-            <td colspan="5">{{ diff_inline(course_diff.desirable_knowledge) }}</td>
+            <td colspan="5">{{ diff_inline(course_diff.desirable_knowledge, proposed_course.desirable_knowledge) }}</td>
           </tr>
         </tbody>
       </table>
@@ -216,7 +216,7 @@
         <tbody>
           <tr>
             <th>Prelude</th>
-            <td>{{ diff_inline(course_diff.prelude) }}</td>
+            <td>{{ diff_inline(course_diff.prelude, proposed_course.prelude) }}</td>
           </tr>
           <tr>
             <th>Course Objectives:</th>

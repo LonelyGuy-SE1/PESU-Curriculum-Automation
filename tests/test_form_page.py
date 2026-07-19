@@ -18,7 +18,7 @@ def test_form_page_loads():
     client = TestClient(app)
     response = client.get("/form/")
     assert response.status_code == 200
-    assert "Course Submission" in response.text
+    assert "Submit Course" in response.text
     monkeypatch.undo()
 
 
@@ -117,7 +117,7 @@ def test_backend_rejects_long_email():
 
 def test_form_has_rule_accent():
     html = FORM_HTML.read_text()
-    assert 'class="rule"' in html
+    assert 'class="toolbar"' in html
 
 
 def test_form_has_auth_guard():

@@ -53,6 +53,7 @@ const draftAttachments = document.getElementById("draft-attachments");
 const send = document.getElementById("send");
 const stopBtn = document.getElementById("stop-btn");
 const versionDisplay = document.getElementById("version-display");
+const docDisplay = document.getElementById("doc-display");
 const editor = document.getElementById("editor");
 const draft = document.getElementById("draft");
 const save = document.getElementById("save");
@@ -172,6 +173,17 @@ function updateVersionDisplay(name) {
       versionDisplay.hidden = false;
     } else {
       versionDisplay.hidden = true;
+    }
+  }
+}
+
+function updateDocDisplay(title) {
+  if (docDisplay) {
+    if (title) {
+      docDisplay.textContent = title;
+      docDisplay.hidden = false;
+    } else {
+      docDisplay.hidden = true;
     }
   }
 }
@@ -940,6 +952,7 @@ async function loadCourse(id) {
   viewer.src = yearParam(`/api/preview/course/${id}`);
   const title = row.fields?.course_title || `Course ${id}`;
   setStatus(title);
+  updateDocDisplay(title);
   const selected = course.querySelector(`option[value="${id}"]`);
   if (selected) selected.textContent = title;
   queuedFiles = [];
@@ -963,11 +976,28 @@ async function loadVersionCourse(versionId, refinedId) {
   editor.value = JSON.stringify(body.fields || {}, null, 2);
   viewer.src = yearParam(`/api/versions/${versionId}/courses/${refinedId}/preview`);
   updateVersionDisplay(body.version.name);
+  updateDocDisplay(body.fields?.course_title || `Course ${refinedId}`);
   setStatus(`${body.version.name}: ${body.fields?.course_title || `Course ${refinedId}`}`);
   queuedFiles = [];
   renderDraftAttachments();
   await ensureChatSession();
   await renderMessages();
+}
+
+async function loadVersionInEditor(versionId) {
+  const response = await fetch(`/api/versions/${versionId}`);
+  if (!response.ok) throw new Error("Unable to load version");
+  const body = await response.json();
+  const version = body.version;
+  const courses = body.courses || [];
+  updateVersionDisplay(version.name);
+  if (!courses.length) {
+    updateDocDisplay("");
+    setStatus(`${version.name}: No courses in this version.`, "error");
+    return;
+  }
+  versionMode = true;
+  await loadVersionCourse(versionId, courses[0].refined_id);
 }
 
 async function loadDocumentPreview() {
@@ -978,6 +1008,7 @@ async function loadDocumentPreview() {
   save.disabled = true;
   hideCourseControls();
   updateVersionDisplay("");
+  updateDocDisplay("");
   updateRestoreVisibility();
   editor.value = "";
   resetReview();
@@ -1352,7 +1383,14 @@ window.addEventListener("unhandledrejection", (event) => {
 
 const initialVersion = initialParams.get("version");
 const initialCourse = initialParams.get("course");
-const initialLoad = initialVersion && initialCourse ? loadVersionCourse(initialVersion, initialCourse) : loadDocumentPreview();
+let initialLoad;
+if (initialVersion && initialCourse) {
+  initialLoad = loadVersionCourse(initialVersion, initialCourse);
+} else if (initialVersion) {
+  initialLoad = loadVersionInEditor(initialVersion);
+} else {
+  initialLoad = loadDocumentPreview();
+}
 
 Promise.all([refreshVersions(), initialLoad]).catch(() => {
   loading.classList.remove("active");

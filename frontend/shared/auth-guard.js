@@ -1,4 +1,5 @@
 (function () {
+  document.documentElement.style.display = "none";
   var KEY = "sb-supgrlinqgxvifijgbns-auth-token";
   try {
     var stored = localStorage.getItem(KEY);
@@ -15,4 +16,5 @@
     window.location.href = "/auth/";
     return;
   }
+  document.documentElement.style.display = "";
 })();
