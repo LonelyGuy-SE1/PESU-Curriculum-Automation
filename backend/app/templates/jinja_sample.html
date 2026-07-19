@@ -63,8 +63,10 @@
       }
 
       .wordmark {
-        width: 265px;
-        height: auto;
+        font-family: 'Outfit', sans-serif;
+        font-size: 10pt;
+        font-weight: 600;
+        letter-spacing: 0.3pt;
       }
 
       table {
@@ -339,6 +341,7 @@
       </div>
       {% endif %}
       {% if show_summaries | default(false) %}
+        {% include "jinja_program.html" %}
         {% set summary_range = "early" %}
         {% include "jinja_1_to_8.html" %}
         {% include "jinja_sem_5_6.html" %}
@@ -353,7 +356,7 @@
           {% endif %}
           <header class="letterhead">
             <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
-            <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />
+            <span class="wordmark">Computer Science and Engineering</span>
           </header>
 
           <table class="meta">
@@ -500,5 +503,12 @@
     {% else %}
       <div class="empty">No refined courses found for Semester {{ semester }}.</div>
     {% endif %}
+    <article class="summary-page">
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:90vh; text-align:center;">
+        <img src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" style="width:100px; height:auto; margin-bottom:24pt;" />
+        <h1 style="font-size:18pt; font-weight:700; margin:0 0 8pt;">Thank You</h1>
+        <p style="font-size:10pt; color:#555; margin:0;">P.E.S. University - Curriculum {{ curriculum_year }}</p>
+      </div>
+    </article>
   </body>
 </html>

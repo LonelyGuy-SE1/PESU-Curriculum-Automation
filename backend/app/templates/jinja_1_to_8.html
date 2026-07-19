@@ -119,7 +119,7 @@
     <article class="summary-page">
       <header class="letterhead">
         <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
-        <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />
+        <span class="wordmark">Computer Science and Engineering</span>
       </header>
       {% for summary_semester in [1, 2] %}
         {% if not requested_semester or requested_semester == summary_semester|string %}
@@ -142,7 +142,7 @@
         <article class="summary-page">
           <header class="letterhead">
             <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
-            <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />
+            <span class="wordmark">Computer Science and Engineering</span>
           </header>
           {{ regular_table(summary_semester, true) }}
         </article>
@@ -163,7 +163,7 @@
     <article class="summary-page final-year-summary">
       <header class="letterhead">
         <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
-        <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />
+        <span class="wordmark">Computer Science and Engineering</span>
       </header>
 
       {% for summary_semester in [7, 8] %}

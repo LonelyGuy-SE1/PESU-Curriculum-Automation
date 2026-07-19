@@ -380,8 +380,6 @@ def diff_two_versions(version_id1: int, version_id2: int, curriculum_year: str |
     if cached:
         return HTMLResponse(cached, headers={"Cache-Control": "public, max-age=30"})
     try:
-        v1 = _version(version_id1)
-        v2 = _version(version_id2)
         fs1 = (
             supabase.table("finalized_submissions")
             .select("refined_id,course_json")

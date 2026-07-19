@@ -275,7 +275,7 @@ def test_curriculum_template_clubs_semester_one_and_two_summary():
     early = html.split("III SEMESTER", 1)[0]
     assert "I SEMESTER (2025-29 BATCH)" in early
     assert "II SEMESTER (2025-29 BATCH)" in early
-    assert early.count('class="summary-page"') == 1
+    assert early.count('class="summary-page"') == 4
 
 
 def test_curriculum_template_renders_final_year_summary():

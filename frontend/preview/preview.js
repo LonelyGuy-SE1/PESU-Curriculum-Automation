@@ -52,7 +52,7 @@ async function courseIds(sem) {
 
 async function fetchCourses(sem) {
   if (sem === "all") return [];
-  const url = `/api/preview/semester/${sem}/courses`;
+  const url = `/api/preview/semester/${sem}/courses?curriculum_year=${encodeURIComponent(yearValue())}`;
   const response = await fetch(url);
   if (!response.ok) return [];
   const body = await response.json();
@@ -118,6 +118,7 @@ async function loadSemester(sem) {
     const opt = document.createElement("option");
     opt.value = c.id;
     opt.textContent = `${c.course_code} - ${c.course_title}`;
+    opt.dataset.code = c.course_code;
     course.appendChild(opt);
   }
   course.value = "";
@@ -133,7 +134,7 @@ function loadSelectedCourse() {
     return;
   }
   const opt = course.options[course.selectedIndex];
-  loadIntoViewer(coursePdfUrl(selectedId), opt.textContent);
+  loadIntoViewer(coursePdfUrl(selectedId), opt.dataset.code);
 }
 
 semester.addEventListener("change", () => {

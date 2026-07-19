@@ -105,8 +105,8 @@
     {% if totals.count or elective_a.count or elective_b.count %}
       <article class="summary-page">
         <header class="letterhead">
-          <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
-          <img class="wordmark" src="{{ asset_root | default('') }}images/image1.png" alt="PES University" />
+        <img class="seal" src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" />
+        <span class="wordmark">Computer Science and Engineering</span>
         </header>
         <h2 class="semester-title">{{ SEMESTER_NAMES[summary_semester|string] }} SEMESTER {{ batch_label(summary_semester, curriculum_year) }}</h2>
 

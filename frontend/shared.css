@@ -253,5 +253,5 @@ a.button-link:focus-visible {
 .home-btn:hover {
   background: var(--accent);
   color: var(--foreground);
-  border-color: var(--border-strong);
+  border-color: var(--pesu-orange);
 }

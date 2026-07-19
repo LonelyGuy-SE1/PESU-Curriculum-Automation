@@ -9,7 +9,7 @@ from weasyprint import HTML
 
 from app import cache
 from app.preview import build_course_preview, build_specialization_context
-from app.rendering import FRONTEND_DIR, templates
+from app.rendering import FRONTEND_DIR, course_code_for_year, templates
 from app.services.curriculum import attach_submissions, ordered_courses, selected_curriculum_year
 from app.supabase import first_row, supabase
 
@@ -18,14 +18,15 @@ router = APIRouter()
 
 
 @router.get("/preview/semester/{sem}/courses")
-def list_courses(sem: int):
-    cache_key = f"sem_courses:{sem}"
+def list_courses(sem: int, curriculum_year: str | None = Query(None)):
+    cy = selected_curriculum_year(curriculum_year)
+    cache_key = f"sem_courses:{sem}:{cy}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
-    result = supabase.table("refined_submissions").select("id,status,course_code,course_title").in_("status", ["refined"]).eq("visible", True).eq("semester", sem).order("id").execute()
+    result = supabase.table("refined_submissions").select("id,status,course_code,course_title,semester").in_("status", ["refined"]).eq("visible", True).eq("semester", sem).order("id").execute()
     ids = [row["id"] for row in result.data]
-    courses = [{"id": row["id"], "course_code": row.get("course_code") or "", "course_title": row.get("course_title") or ""} for row in result.data]
+    courses = [{"id": row["id"], "course_code": course_code_for_year(row.get("course_code") or "", row.get("semester"), cy), "course_title": row.get("course_title") or ""} for row in result.data]
     out = {"course_ids": ids, "courses": courses}
     cache.put(cache_key, out, ttl=300)
     return out
