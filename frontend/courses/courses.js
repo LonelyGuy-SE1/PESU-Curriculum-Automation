@@ -3,6 +3,8 @@ const visibility = document.getElementById("visibility");
 const search = document.getElementById("search");
 const statusText = document.getElementById("status");
 const table = document.getElementById("course-table");
+const tableWrap = table ? table.closest(".table-wrap") : null;
+const loading = document.getElementById("loading");
 let courses = [];
 let openId = "";
 
@@ -142,11 +144,15 @@ function yearParam(base) {
 }
 
 async function loadCourses() {
+  if (loading) loading.hidden = false;
+  if (tableWrap) tableWrap.querySelector("table").hidden = true;
   setStatus("Loading courses...");
   const response = await fetch(yearParam("/api/courses"));
   if (!response.ok) throw new Error("Unable to load courses");
   const body = await response.json();
   courses = body.courses || [];
+  if (loading) loading.hidden = true;
+  if (tableWrap) tableWrap.querySelector("table").hidden = false;
   render();
 }
 

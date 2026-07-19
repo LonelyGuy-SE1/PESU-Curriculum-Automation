@@ -423,12 +423,12 @@ def build_refined_payload(sub: dict, out: dict, prior_courses: list[str] | None 
 
     from app.services.elective_categorization import is_elective_course
 
-    code = _course_code(raw_content) or sub["course_code"]
+    code = _course_code(raw_content) or sub.get("course_code", "")
     return {
         "submission_id": sub["id"],
         "semester": int(sub["semester"]),
         "course_code": code,
-        "course_title": _text(out.get("course_title"), sub["course_title"]),
+        "course_title": sub["course_title"],
         "program": compute_program(sub["target_department"]),
         "course_type": compute_course_type(sub["credit_category"]),
         "is_elective": is_elective_course({"course_code": code, "semester": sub["semester"]}),

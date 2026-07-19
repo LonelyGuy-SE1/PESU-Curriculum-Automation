@@ -64,15 +64,22 @@ def preview_course(refined_id: int, curriculum_year: str | None = Query(None)):
     cached = cache.get(cache_key)
     if cached is not None:
         return HTMLResponse(cached, headers={"Cache-Control": "public, max-age=30, s-maxage=300, stale-while-revalidate=600"})
-    row = first_row(supabase.table("refined_submissions").select("*").eq("id", refined_id))
-    if not row:
-        raise HTTPException(status_code=404, detail="Refined submission not found")
-    row = attach_submissions([row])[0]
-    html = templates.get_template("jinja_sample.html").render(
-        course=build_course_preview(row),
-        curriculum_year=cy,
-        asset_root="/",
-    )
+    try:
+        row = first_row(supabase.table("refined_submissions").select("*").eq("id", refined_id))
+        if not row:
+            raise HTTPException(status_code=404, detail="Refined submission not found")
+        row = attach_submissions([row])[0]
+        html = templates.get_template("jinja_sample.html").render(
+            course=build_course_preview(row),
+            curriculum_year=cy,
+            asset_root="/",
+            show_thank_you=False,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Preview render failed for refined_id=%s", refined_id)
+        raise HTTPException(status_code=500, detail="Failed to render course preview.")
     cache.put(cache_key, html, ttl=600)
     return HTMLResponse(html, headers={"Cache-Control": "public, max-age=30, s-maxage=300, stale-while-revalidate=600"})
 
@@ -84,19 +91,26 @@ def download_course_pdf(refined_id: int, download: bool = Query(False), curricul
     cached = cache.get(cache_key)
     if cached is not None:
         return pdf_response(cached, f"course-{refined_id}.pdf", download)
-    row = first_row(supabase.table("refined_submissions").select("*").eq("id", refined_id))
-    if not row:
-        raise HTTPException(status_code=404, detail="Refined submission not found")
-    row = attach_submissions([row])[0]
-    html = templates.get_template("jinja_sample.html").render(
-        courses=[build_course_preview(row)],
-        semester="",
-        curriculum_year=cy,
-        asset_root="",
-        show_summaries=True,
-        **build_specialization_context(cy),
-    )
-    pdf = HTML(string=html, base_url=str(FRONTEND_DIR)).write_pdf()
+    try:
+        row = first_row(supabase.table("refined_submissions").select("*").eq("id", refined_id))
+        if not row:
+            raise HTTPException(status_code=404, detail="Refined submission not found")
+        row = attach_submissions([row])[0]
+        html = templates.get_template("jinja_sample.html").render(
+            courses=[build_course_preview(row)],
+            semester="",
+            curriculum_year=cy,
+            asset_root="",
+            show_summaries=True,
+            show_thank_you=False,
+            **build_specialization_context(cy),
+        )
+        pdf = HTML(string=html, base_url=str(FRONTEND_DIR)).write_pdf()
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Course PDF render failed for refined_id=%s", refined_id)
+        raise HTTPException(status_code=500, detail="Failed to render course PDF.")
     cache.put(cache_key, pdf, ttl=600)
     return pdf_response(pdf, f"course-{refined_id}.pdf", download)
 

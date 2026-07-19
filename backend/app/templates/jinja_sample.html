@@ -503,6 +503,7 @@
     {% else %}
       <div class="empty">No refined courses found for Semester {{ semester }}.</div>
     {% endif %}
+    {% if show_thank_you | default(true) %}
     <article class="summary-page">
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:90vh; text-align:center;">
         <img src="{{ asset_root | default('') }}images/image2.png" alt="PES University logo" style="width:100px; height:auto; margin-bottom:24pt;" />
@@ -510,5 +511,6 @@
         <p style="font-size:10pt; color:#555; margin:0;">P.E.S. University - Curriculum {{ curriculum_year }}</p>
       </div>
     </article>
+    {% endif %}
   </body>
 </html>

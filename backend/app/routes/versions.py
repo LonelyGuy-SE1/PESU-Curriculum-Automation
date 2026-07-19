@@ -286,7 +286,7 @@ def preview_version_course(version_id: int, refined_id: int, curriculum_year: st
     except APIError as exc:
         raise database_http_exception(exc) from exc
     _version(version_id)
-    html = templates.get_template("jinja_sample.html").render(course=snapshot["course_json"], curriculum_year=selected_curriculum_year(curriculum_year), asset_root="/")
+    html = templates.get_template("jinja_sample.html").render(course=snapshot["course_json"], curriculum_year=selected_curriculum_year(curriculum_year), asset_root="/", show_thank_you=False)
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 

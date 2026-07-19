@@ -71,6 +71,8 @@ p {
 
 .table-wrap {
   overflow: auto;
+  position: relative;
+  min-height: 320px;
 }
 
 table {
@@ -177,6 +179,43 @@ td.center input[type="checkbox"]:focus {
   padding: 20px;
   color: var(--muted-foreground);
   text-align: center;
+}
+
+.viewer-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  z-index: 5;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.viewer-loading[hidden] {
+  display: none;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--pesu-blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 760px) {

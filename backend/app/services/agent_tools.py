@@ -238,6 +238,13 @@ def _create_course_draft(arguments: dict) -> dict:
         raise ValueError(
             'fields must be a non-empty object containing only the fields to change, e.g. {"text_books": "new value"}. Do not pass all course data; only pass what should change.'
         )
+    row = first_row(supabase.table("refined_submissions").select("status").eq("id", refined_id))
+    if not row:
+        raise ValueError(f"Course with refined_id {refined_id} not found.")
+    if row.get("status") == "draft":
+        from app.services.curriculum import update_refined_fields
+        update_refined_fields(refined_id, fields)
+        return {"message": f"Course {refined_id} is still a draft. Updated directly without creating a review draft.", "direct_update": True}
     record = draft_record(refined_id, fields, str(arguments.get("reason") or ""))
     draft = supabase.table("agent_drafts").insert(record).execute().data[0]
     return {"draft": draft}

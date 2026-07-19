@@ -21,4 +21,7 @@ def update_refined(refined_id: int, payload: dict):
     fields = payload.get("fields")
     if not isinstance(fields, dict):
         raise HTTPException(status_code=400, detail="fields is required")
-    return {"message": "Updated", "data": update_refined_fields(refined_id, fields)}
+    try:
+        return {"message": "Updated", "data": update_refined_fields(refined_id, fields)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

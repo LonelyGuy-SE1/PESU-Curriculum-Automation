@@ -27,6 +27,11 @@ def receive(data: CourseSubmission, background_tasks: BackgroundTasks):
         credit_cat = user_credit
     else:
         credit_cat = parsed.credit_category
+    raw = data.raw_course_content or ""
+    if "Course Code" not in raw:
+        raw = f"Course Code: {data.course_code}\n{raw}"
+    payload.pop("course_code", None)
+    payload["raw_course_content"] = raw
     payload.update({
         "offering_department": parsed.offering_dept,
         "target_department": parsed.target_dept,

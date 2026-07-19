@@ -87,7 +87,7 @@ def preview_agent_draft(draft_id: int, diff: bool = False, curriculum_year: str 
             asset_root="/",
         )
     else:
-        html = templates.get_template("jinja_sample.html").render(course=draft["proposed_json"], curriculum_year=selected_curriculum_year(curriculum_year), asset_root="/")
+        html = templates.get_template("jinja_sample.html").render(course=draft["proposed_json"], curriculum_year=selected_curriculum_year(curriculum_year), asset_root="/", show_thank_you=False)
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 

@@ -237,6 +237,20 @@ body {
 
 .tree-item:hover { background: var(--accent); }
 
+.tree-item.current-version {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tree-item.current-version .item-name {
+  font-weight: 600;
+}
+
+.tree-item:not(.active).current-version .item-name {
+  color: var(--pesu-blue);
+}
+
 .tree-item.active {
   background: var(--primary);
   color: var(--primary-foreground);
@@ -299,7 +313,7 @@ body {
   width: 24px;
   height: 24px;
   padding: 0;
-  border: 0;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -307,13 +321,30 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
 }
 
-.tree-item:hover .delete-btn { opacity: 1; }
-.tree-item .delete-btn:hover { background: #fef2f2; color: #dc2626; }
-.tree-item.active .delete-btn { color: var(--primary-foreground); }
-.tree-item.active .delete-btn:hover { background: rgba(220,38,38,0.2); }
+.tree-item:hover .delete-btn {
+  opacity: 1;
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+.tree-item .delete-btn:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+.tree-item.active .delete-btn {
+  color: #fca5a5;
+  background: rgba(220,38,38,0.15);
+  border-color: rgba(220,38,38,0.3);
+}
+.tree-item.active .delete-btn:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
 
 .edit-form {
   display: flex;

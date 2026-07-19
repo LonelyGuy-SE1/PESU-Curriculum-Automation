@@ -48,9 +48,39 @@ let activeVersionId = null;
 
 function renderVersionTree(groups) {
   versionList.replaceChildren();
+
+  const current = document.createElement("div");
+  current.className = "tree-item current-version";
+  current.tabIndex = 0;
+  current.role = "button";
+  if (activeVersionId === "current") current.classList.add("active");
+  current.dataset.versionId = "current";
+
+  const info = document.createElement("div");
+  info.className = "item-info";
+
+  const nameRow = document.createElement("div");
+  nameRow.className = "item-name";
+  nameRow.textContent = "Current";
+
+  const meta = document.createElement("div");
+  meta.className = "item-meta";
+  meta.textContent = "Live curriculum state";
+
+  info.append(nameRow, meta);
+  current.appendChild(info);
+
+  const activateCurrent = () => loadCurrent();
+  current.addEventListener("click", activateCurrent);
+  current.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activateCurrent(); }
+  });
+
+  versionList.appendChild(current);
+
   if (!groups.length) {
     const empty = document.createElement("div");
-    empty.className = "empty-state";
+    empty.className = "empty";
     empty.textContent = "No snapshots saved. Create one from the Agentic Editor.";
     versionList.appendChild(empty);
     return;
@@ -314,10 +344,11 @@ function renderFilteredVersions() {
 }
 
 function populateCompareSelects() {
+  const currentOption = '<option value="current">Current</option>';
   const options = allVersions.map((v) => `<option value="${v.id}">${v.name || `Snapshot ${v.id}`}</option>`).join("");
   const placeholder = '<option value="">Select version</option>';
-  baseVersionSelect.innerHTML = placeholder + options;
-  compareVersionSelect.innerHTML = placeholder + options;
+  baseVersionSelect.innerHTML = placeholder + currentOption + options;
+  compareVersionSelect.innerHTML = placeholder + currentOption + options;
 }
 
 if (compareBtn) {
@@ -332,8 +363,8 @@ if (compareBtn) {
       setStatus("Select two different versions.", "error");
       return;
     }
-    const v1 = allVersions.find((v) => String(v.id) === id1);
-    const v2 = allVersions.find((v) => String(v.id) === id2);
+    const v1 = id1 === "current" ? { name: "Current" } : allVersions.find((v) => String(v.id) === id1);
+    const v2 = id2 === "current" ? { name: "Current" } : allVersions.find((v) => String(v.id) === id2);
     emptyState.hidden = true;
     viewerLoading.hidden = false;
     viewer.hidden = true;
@@ -344,7 +375,15 @@ if (compareBtn) {
       viewer.removeEventListener("load", onLoad);
     };
     viewer.addEventListener("load", onLoad);
-    viewer.src = `/api/versions/${id1}/diff/${id2}`;
+
+    let url;
+    if (id1 === "current" || id2 === "current") {
+      const versionId = id1 === "current" ? id2 : id1;
+      url = `/api/versions/${versionId}/preview?diff=1`;
+    } else {
+      url = `/api/versions/${id1}/diff/${id2}`;
+    }
+    viewer.src = url;
     openEditor.hidden = true;
     setStatus(`Comparing: ${v1?.name || id1} vs ${v2?.name || id2}`);
     closeSidebar();
@@ -404,6 +443,37 @@ function loadVersion(versionId) {
 function closeSidebar() {
   sidebar.classList.remove("open");
   sidebarOverlay.hidden = true;
+}
+
+function loadCurrent() {
+  activeVersionId = "current";
+  versionList.querySelectorAll(".tree-item").forEach((el) => el.classList.toggle("active", el.dataset.versionId === "current"));
+
+  emptyState.hidden = true;
+  viewerLoading.hidden = false;
+  viewer.hidden = true;
+
+  const onLoad = () => {
+    viewerLoading.hidden = true;
+    viewer.hidden = false;
+    viewer.removeEventListener("load", onLoad);
+  };
+  viewer.addEventListener("load", onLoad);
+  viewer.addEventListener("error", function errorHandler() {
+    viewerLoading.hidden = true;
+    viewer.hidden = false;
+    viewer.removeEventListener("error", errorHandler);
+    viewer.removeEventListener("load", onLoad);
+    setStatus("Preview failed to load.", "error");
+  });
+
+  const y = localStorage.getItem("curriculumYear") || "";
+  let url = "/api/preview/html";
+  if (y) url += `?curriculum_year=${encodeURIComponent(y)}`;
+  viewer.src = url;
+  openEditor.hidden = true;
+  setStatus("Viewing current curriculum state");
+  closeSidebar();
 }
 
 function openSidebar() {

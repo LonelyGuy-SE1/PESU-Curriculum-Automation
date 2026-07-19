@@ -99,14 +99,21 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
+let resultTimer = null;
+
 function showError(msg) {
+  clearTimeout(resultTimer);
   resultDiv.classList.remove("hidden", "success");
   resultDiv.classList.add("error");
   resultDiv.textContent = msg;
 }
 
 function showSuccess(msg) {
+  clearTimeout(resultTimer);
   resultDiv.classList.remove("hidden", "error");
   resultDiv.classList.add("success");
   resultDiv.textContent = msg;
+  resultTimer = setTimeout(() => {
+    resultDiv.classList.add("hidden");
+  }, 3500);
 }

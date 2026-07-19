@@ -163,17 +163,34 @@ def _assistant_message(data: dict) -> dict:
 
 
 def call(system: str, user: str) -> dict:
-    with Client(timeout=120) as c:
-        r = c.post(
-            URL,
-            headers=_headers(),
-            json={"model": MODEL, "messages": _messages(system, [{"role": "user", "content": user}])},
-        )
-        _raise_for_status(r)
-        data = r.json()
-        text = _message_content(data)
-        text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        return json.loads(text)
+    last_exc = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            with Client(timeout=120) as c:
+                r = c.post(
+                    URL,
+                    headers=_headers(),
+                    json={"model": MODEL, "messages": _messages(system, [{"role": "user", "content": user}])},
+                )
+                _raise_for_status(r)
+                data = r.json()
+                text = _message_content(data)
+                text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                return json.loads(text)
+        except _RETRYABLE as exc:
+            last_exc = exc
+            logger.warning("Transient network error in call (attempt %d/%d): %s", attempt + 1, _MAX_RETRIES, exc)
+            if attempt < _MAX_RETRIES - 1:
+                _retry_sleep(attempt)
+        except OpenRouterError as exc:
+            last_exc = exc
+            if exc.status_code in {429, 502, 503}:
+                logger.warning("Provider error %d in call (attempt %d/%d): %s", exc.status_code, attempt + 1, _MAX_RETRIES, exc.message)
+                if attempt < _MAX_RETRIES - 1:
+                    _retry_sleep(attempt)
+            else:
+                raise
+    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
 
 
 def stream_chat(system: str, messages: list[dict], tools: list[dict] | None = None, tool_runner=None, on_tool_result=None):

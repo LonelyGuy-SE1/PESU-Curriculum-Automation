@@ -171,7 +171,10 @@ def update_refined_fields(refined_id: int, fields: dict) -> dict | None:
     update = {key: fields[key] for key in REFINED_FIELDS if key in fields}
     for key in ("semester", "lecture_hours", "tutorial_hours", "practical_hours", "self_study", "credits"):
         if key in update:
-            update[key] = int(update[key] or 0)
+            try:
+                update[key] = int(update[key] or 0)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Invalid value for {key}: {update[key]!r}. Must be a number.") from exc
     row = first_row(supabase.table("refined_submissions").select("status").eq("id", refined_id))
     if row and row.get("status") == "draft":
         update["status"] = "refined"
