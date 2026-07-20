@@ -226,7 +226,7 @@ def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_to
             if model == MODEL and FALLBACK_MODEL and not switched_to_fallback:
                 switched_to_fallback = True
                 active_model = FALLBACK_MODEL
-                yield {"$status": f"Primary model unavailable. Switching to backup model..."}
+                yield {"$status": "Primary model unavailable. Switching to backup model..."}
                 logger.info("Primary model %s failed after %d attempts, switching to %s", MODEL, _MAX_RETRIES, FALLBACK_MODEL)
                 models_to_try.append(FALLBACK_MODEL)
 

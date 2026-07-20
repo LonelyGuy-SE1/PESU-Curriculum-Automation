@@ -752,27 +752,6 @@ iframe {
   max-width: 220px;
 }
 
-.doc-display {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 10px;
-  height: 26px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--pesu-blue);
-  background: var(--muted);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 240px;
-}
-
-.doc-display[hidden] {
-  display: none;
-}
-
 .fields-panel {
   grid-template-rows: 1fr auto;
 }

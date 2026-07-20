@@ -53,7 +53,7 @@ const draftAttachments = document.getElementById("draft-attachments");
 const send = document.getElementById("send");
 const stopBtn = document.getElementById("stop-btn");
 const versionDisplay = document.getElementById("version-display");
-const docDisplay = document.getElementById("doc-display");
+
 const editor = document.getElementById("editor");
 const draft = document.getElementById("draft");
 const save = document.getElementById("save");
@@ -149,14 +149,14 @@ function hideCourseControls() {
   semester.hidden = true;
   course.hidden = true;
   const previewBtn = document.getElementById("preview");
-  if (previewBtn) previewBtn.hidden = true;
+  if (previewBtn) previewBtn.hidden = false;
 }
 
 function showCourseControls() {
   semester.hidden = false;
   course.hidden = false;
   const previewBtn = document.getElementById("preview");
-  if (previewBtn) previewBtn.hidden = false;
+  if (previewBtn) previewBtn.hidden = true;
 }
 
 function updateRestoreVisibility() {
@@ -174,17 +174,6 @@ function updateVersionDisplay(name) {
       versionDisplay.hidden = false;
     } else {
       versionDisplay.hidden = true;
-    }
-  }
-}
-
-function updateDocDisplay(title) {
-  if (docDisplay) {
-    if (title) {
-      docDisplay.textContent = title;
-      docDisplay.hidden = false;
-    } else {
-      docDisplay.hidden = true;
     }
   }
 }
@@ -215,6 +204,13 @@ async function courseIds(sem) {
   if (!response.ok) return [];
   const body = await response.json();
   return body.course_ids || [];
+}
+
+async function courseEntries(sem) {
+  const response = await fetch(`/api/preview/semester/${sem}/courses`);
+  if (!response.ok) return [];
+  const body = await response.json();
+  return body.courses || [];
 }
 
 async function firstAvailableSemester() {
@@ -962,7 +958,6 @@ async function loadCourse(id) {
   viewer.src = yearParam(`/api/preview/course/${id}`);
   const title = row.fields?.course_title || `Course ${id}`;
   setStatus(title);
-  updateDocDisplay(title);
   const selected = course.querySelector(`option[value="${id}"]`);
   if (selected) selected.textContent = title;
   queuedFiles = [];
@@ -987,7 +982,6 @@ async function loadVersionCourse(versionId, refinedId) {
   editor.value = JSON.stringify(body.fields || {}, null, 2);
   viewer.src = yearParam(`/api/versions/${versionId}/courses/${refinedId}/preview`);
   updateVersionDisplay(body.version.name);
-  updateDocDisplay(body.fields?.course_title || `Course ${refinedId}`);
   setStatus(`${body.version.name}: ${body.fields?.course_title || `Course ${refinedId}`}`);
   queuedFiles = [];
   renderDraftAttachments();
@@ -1003,7 +997,6 @@ async function loadVersionInEditor(versionId) {
   const courses = body.courses || [];
   updateVersionDisplay(version.name);
   if (!courses.length) {
-    updateDocDisplay("");
     setStatus(`${version.name}: No courses in this version.`, "error");
     return;
   }
@@ -1019,7 +1012,6 @@ async function loadDocumentPreview() {
   save.disabled = true;
   hideCourseControls();
   updateVersionDisplay("");
-  updateDocDisplay("");
   updateRestoreVisibility();
   editor.value = "";
   resetReview();
@@ -1033,10 +1025,10 @@ async function loadDocumentPreview() {
 
 async function refreshCourseDropdown() {
   const sem = semester.value;
-  const ids = await courseIds(sem);
+  const entries = await courseEntries(sem);
   const prev = course.value;
-  course.replaceChildren(...ids.map((id) => option(id, `Course ${id}`)));
-  if (prev && ids.includes(prev)) course.value = prev;
+  course.replaceChildren(...entries.map((c) => option(String(c.id), `${c.course_code ? c.course_code + " - " : ""}${c.course_title || "Course " + c.id}`)));
+  if (prev && entries.some((c) => String(c.id) === prev)) course.value = prev;
 }
 
 async function loadCourseForReview(id) {
@@ -1091,15 +1083,15 @@ async function loadSemester(sem) {
   loading.classList.add("active");
   setStatus("Loading...");
 
-  const ids = await courseIds(sem);
-  if (!ids.length) {
+  const entries = await courseEntries(sem);
+  if (!entries.length) {
     loading.classList.remove("active");
     setStatus(`No refined courses found for Semester ${sem}.`);
     return;
   }
 
-  course.replaceChildren(...ids.map((id) => option(id, `Course ${id}`)));
-  await loadCourse(ids[0]);
+  course.replaceChildren(...entries.map((c) => option(String(c.id), `${c.course_code ? c.course_code + " - " : ""}${c.course_title || "Course " + c.id}`)));
+  await loadCourse(String(entries[0].id));
 }
 
 chatTab.addEventListener("click", () => setTab("chat"));
