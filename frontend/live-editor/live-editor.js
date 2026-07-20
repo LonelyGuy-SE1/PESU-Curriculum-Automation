@@ -338,6 +338,30 @@ async function createChatSession() {
   return activeSessionId;
 }
 
+function isDefaultTitle(title) {
+  if (!title) return true;
+  if (title === "New Thread") return true;
+  if (/^Thread \d+/.test(title)) return true;
+  if (title === statusText.textContent) return true;
+  return false;
+}
+
+async function autoRenameSession(userMessage) {
+  if (!activeSessionId) return;
+  const selected = chatSession.options[chatSession.selectedIndex];
+  if (selected && !isDefaultTitle(selected.text)) return;
+  const trimmed = userMessage.trim().replace(/\s+/g, " ");
+  const title = trimmed.length > 60 ? trimmed.slice(0, 57) + "..." : trimmed;
+  if (!title) return;
+  await fetch(`/api/chat/sessions/${activeSessionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  await refreshChatSessions();
+  chatSession.value = activeSessionId;
+}
+
 async function renameActiveChat() {
   if (!activeSessionId || !chatTitle.value.trim()) {
     exitRenameMode();
@@ -392,8 +416,8 @@ async function ensureChatSession() {
     await refreshChatSessions();
     if ([...chatSession.options].some((item) => item.value === existing)) return existing;
     localStorage.removeItem(key);
-    activeSessionId = "";
   }
+  activeSessionId = "";
   await refreshChatSessions();
   if (chatSession.value) {
     activeSessionId = chatSession.value;
@@ -1275,6 +1299,7 @@ send.addEventListener("click", async () => {
         renderMessages().catch(() => {});
       }
     });
+    autoRenameSession(content).catch(() => {});
   } catch (error) {
     const aborted = controller.signal.aborted;
     const text = aborted ? "Stopped." : (error instanceof Error ? error.message : "Agent failed");
