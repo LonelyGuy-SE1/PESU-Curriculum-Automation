@@ -363,6 +363,7 @@ Required backend (`/api` server, loaded from repo-root `.env`):
 Optional:
 
 - `CURRICULUM_YEAR` — the active batch label (e.g. `2025-26`)
+- `OPENROUTER_FALLBACK_MODEL` — backup model used when the primary model fails (e.g. `google/gemma-3-27b-it:free`)
 - `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`
 
 The frontend uses the public Supabase anon key directly in `shared/supabase-client.js`.
