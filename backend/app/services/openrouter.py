@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random
 import time
 
 import httpx
@@ -12,6 +13,7 @@ load_dotenv("../.env")
 URL = os.environ["OPENROUTER_URL"].strip()
 KEY = os.environ["OPENROUTER_API_KEY"].strip()
 MODEL = os.environ["OPENROUTER_MODEL"].strip()
+FALLBACK_MODEL = os.environ.get("OPENROUTER_FALLBACK_MODEL", "").strip() or None
 logger = logging.getLogger(__name__)
 
 _context_length: int | None = None
@@ -75,6 +77,7 @@ _TOOL_LABELS = {
     "remove_elective_from_tracks": "Removing elective",
     "get_preview_url": "Getting preview URL",
     "list_courses": "Looking up courses",
+    "update_agent_draft": "Updating draft",
 }
 
 
@@ -127,12 +130,22 @@ def _raise_for_status(response) -> None:
         ) from exc
 
 
-_RETRYABLE = (httpx.ReadError, httpx.ConnectError, httpx.RemoteProtocolError)
+_RETRYABLE = (httpx.ReadError, httpx.ConnectError, httpx.RemoteProtocolError, httpx.TimeoutException)
+_RETRYABLE_STATUS = {502, 503}
 _MAX_RETRIES = 3
+_FIB = [1, 1, 2, 3, 5, 8, 13]
 
 
-def _retry_sleep(attempt: int) -> None:
-    time.sleep(2 ** attempt)
+def _retry_sleep(attempt: int, retry_after: str | None = None) -> None:
+    if retry_after:
+        try:
+            time.sleep(min(float(retry_after), 30))
+            return
+        except (ValueError, TypeError):
+            pass
+    base = _FIB[min(attempt, len(_FIB) - 1)]
+    jitter = base * 0.25 * (2 * random.random() - 1)
+    time.sleep(max(0.5, base + jitter))
 
 
 def _provider_error(data: dict) -> str:
@@ -162,123 +175,67 @@ def _assistant_message(data: dict) -> dict:
     return message
 
 
-def call(system: str, user: str) -> dict:
-    last_exc = None
-    for attempt in range(_MAX_RETRIES):
-        try:
-            with Client(timeout=120) as c:
-                r = c.post(
-                    URL,
-                    headers=_headers(),
-                    json={"model": MODEL, "messages": _messages(system, [{"role": "user", "content": user}])},
-                )
-                _raise_for_status(r)
-                data = r.json()
-                text = _message_content(data)
-                text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-                return json.loads(text)
-        except _RETRYABLE as exc:
-            last_exc = exc
-            logger.warning("Transient network error in call (attempt %d/%d): %s", attempt + 1, _MAX_RETRIES, exc)
-            if attempt < _MAX_RETRIES - 1:
-                _retry_sleep(attempt)
-        except OpenRouterError as exc:
-            last_exc = exc
-            if exc.status_code in {429, 502, 503}:
-                logger.warning("Provider error %d in call (attempt %d/%d): %s", exc.status_code, attempt + 1, _MAX_RETRIES, exc.message)
-                if attempt < _MAX_RETRIES - 1:
-                    _retry_sleep(attempt)
-            else:
-                raise
-    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
-
-
-def stream_chat(system: str, messages: list[dict], tools: list[dict] | None = None, tool_runner=None, on_tool_result=None):
-    chat_messages = _messages(system, messages)
-    if tools and tool_runner:
-        yield from _chat_with_tools(chat_messages, tools, tool_runner, on_tool_result)
-        return
-
-    emitted = False
-    try:
-        for token in _stream_chat(chat_messages):
-            emitted = True
-            yield token
-    except (HTTPError, json.JSONDecodeError) as exc:
-        _log_stream_fallback(exc)
-
-    if emitted:
-        return
-
-    text = _chat_text(chat_messages)
-    if text:
-        yield text
-
-
-def _stream_chat(messages: list[dict]):
-    payload = {"model": MODEL, "messages": messages, "stream": True}
-    last_exc = None
-    for attempt in range(_MAX_RETRIES):
-        try:
-            with Client(timeout=120) as client:
-                with client.stream("POST", URL, headers=_headers(), json=payload) as response:
-                    if response.is_error:
-                        response.read()
-                    response.raise_for_status()
-                    for line in response.iter_lines():
-                        token = _stream_token(line)
-                        if token:
-                            yield token
-                    return
-        except _RETRYABLE as exc:
-            last_exc = exc
-            logger.warning("Transient network error in stream (attempt %d/%d): %s", attempt + 1, _MAX_RETRIES, exc)
-            if attempt < _MAX_RETRIES - 1:
-                _retry_sleep(attempt)
-    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
-
-
-def _chat_text(messages: list[dict]) -> str:
-    last_exc = None
-    for attempt in range(_MAX_RETRIES):
-        try:
-            with Client(timeout=120) as client:
-                response = client.post(URL, headers=_headers(), json={"model": MODEL, "messages": messages})
-                _raise_for_status(response)
-                return _message_content(response.json())
-        except _RETRYABLE as exc:
-            last_exc = exc
-            logger.warning("Transient network error in chat_text (attempt %d/%d): %s", attempt + 1, _MAX_RETRIES, exc)
-            if attempt < _MAX_RETRIES - 1:
-                _retry_sleep(attempt)
-    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
-
-
-def _chat_message(messages: list[dict], tools: list[dict]) -> tuple[dict, int]:
-    last_exc = None
-    for attempt in range(_MAX_RETRIES):
-        try:
-            with Client(timeout=120) as client:
-                response = client.post(URL, headers=_headers(), json={"model": MODEL, "messages": messages, "tools": tools})
-                _raise_for_status(response)
-                data = response.json()
-                prompt_tokens = (data.get("usage") or {}).get("prompt_tokens") or 0
-                return _assistant_message(data), prompt_tokens
-        except _RETRYABLE as exc:
-            last_exc = exc
-            logger.warning("Transient network error (attempt %d/%d): %s", attempt + 1, _MAX_RETRIES, exc)
-            if attempt < _MAX_RETRIES - 1:
-                _retry_sleep(attempt)
-    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
+def _chat_message(messages: list[dict], tools: list[dict], model: str = MODEL) -> tuple[dict, int]:
+    with Client(timeout=120) as client:
+        response = client.post(URL, headers=_headers(), json={"model": model, "messages": messages, "tools": tools})
+        _raise_for_status(response)
+        data = response.json()
+        prompt_tokens = (data.get("usage") or {}).get("prompt_tokens") or 0
+        return _assistant_message(data), prompt_tokens
 
 
 def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_tool_result=None):
     last_prompt_tokens = 0
+    active_model = MODEL
+    switched_to_fallback = False
+
     for i in range(50):
         yield {"$status": f"Thinking (step {i + 1})..."}
-        message, prompt_tokens = _chat_message(messages, tools)
+        message = None
+        prompt_tokens = 0
+
+        models_to_try = [active_model]
+
+        for model in models_to_try:
+            for attempt in range(_MAX_RETRIES):
+                try:
+                    message, prompt_tokens = _chat_message(messages, tools, model=model)
+                    break
+                except OpenRouterError as exc:
+                    if exc.status_code == 429:
+                        yield {"$status": f"Rate limited by {model}. {exc.message}"}
+                        logger.warning("Rate limited by %s (attempt %d/%d): %s", model, attempt + 1, _MAX_RETRIES, exc.message)
+                        raise
+                    if exc.status_code in _RETRYABLE_STATUS:
+                        logger.warning("Provider %s error %d (attempt %d/%d): %s", model, exc.status_code, attempt + 1, _MAX_RETRIES, exc.message)
+                        if attempt < _MAX_RETRIES - 1:
+                            yield {"$status": f"Server error ({exc.status_code}). Retrying {model} (attempt {attempt + 2}/{_MAX_RETRIES})..."}
+                            _retry_sleep(attempt, exc.retry_after)
+                        continue
+                    raise
+                except Exception as exc:
+                    logger.warning("Network error with %s (attempt %d/%d): %s", model, attempt + 1, _MAX_RETRIES, exc)
+                    if attempt < _MAX_RETRIES - 1:
+                        yield {"$status": f"Connection error. Retrying {model} (attempt {attempt + 2}/{_MAX_RETRIES})..."}
+                        _retry_sleep(attempt)
+                    continue
+
+            if message is not None:
+                break
+
+            if model == MODEL and FALLBACK_MODEL and not switched_to_fallback:
+                switched_to_fallback = True
+                active_model = FALLBACK_MODEL
+                yield {"$status": "Primary model unavailable. Switching to backup model..."}
+                logger.info("Primary model %s failed after %d attempts, switching to %s", MODEL, _MAX_RETRIES, FALLBACK_MODEL)
+                models_to_try.append(FALLBACK_MODEL)
+
+        if message is None:
+            raise OpenRouterError(502, message="All model providers failed after retries. Please try again later.")
+
         if prompt_tokens:
             last_prompt_tokens = prompt_tokens
+
         tool_calls = message.get("tool_calls") or []
         if not tool_calls:
             text = str(message.get("content") or "").strip()
@@ -358,6 +315,124 @@ def _log_stream_fallback(exc: Exception) -> None:
         )
         return
     logger.warning("OpenRouter streaming failed; retrying without stream. error=%s model=%s", exc.__class__.__name__, MODEL)
+
+
+def _stream_chat(messages: list[dict], model: str = MODEL):
+    payload = {"model": model, "messages": messages, "stream": True}
+    last_exc = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            with Client(timeout=120) as client:
+                with client.stream("POST", URL, headers=_headers(), json=payload) as response:
+                    if response.is_error:
+                        response.read()
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        token = _stream_token(line)
+                        if token:
+                            yield token
+                    return
+        except _RETRYABLE as exc:
+            last_exc = exc
+            logger.warning("Network error in stream with %s (attempt %d/%d): %s", model, attempt + 1, _MAX_RETRIES, exc)
+            if attempt < _MAX_RETRIES - 1:
+                _retry_sleep(attempt)
+        except OpenRouterError as exc:
+            last_exc = exc
+            if exc.status_code in _RETRYABLE_STATUS:
+                logger.warning("Provider %s error %d in stream (attempt %d/%d): %s", model, exc.status_code, attempt + 1, _MAX_RETRIES, exc.message)
+                if attempt < _MAX_RETRIES - 1:
+                    _retry_sleep(attempt, exc.retry_after)
+                continue
+            raise
+    if model == MODEL and FALLBACK_MODEL:
+        logger.info("Primary model %s failed in stream, falling back to %s", MODEL, FALLBACK_MODEL)
+        yield from _stream_chat(messages, model=FALLBACK_MODEL)
+        return
+    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
+
+
+def _chat_text(messages: list[dict], model: str = MODEL) -> str:
+    last_exc = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            with Client(timeout=120) as client:
+                response = client.post(URL, headers=_headers(), json={"model": model, "messages": messages})
+                _raise_for_status(response)
+                return _message_content(response.json())
+        except _RETRYABLE as exc:
+            last_exc = exc
+            logger.warning("Network error in chat_text with %s (attempt %d/%d): %s", model, attempt + 1, _MAX_RETRIES, exc)
+            if attempt < _MAX_RETRIES - 1:
+                _retry_sleep(attempt)
+        except OpenRouterError as exc:
+            last_exc = exc
+            if exc.status_code in _RETRYABLE_STATUS:
+                logger.warning("Provider %s error %d in chat_text (attempt %d/%d): %s", model, exc.status_code, attempt + 1, _MAX_RETRIES, exc.message)
+                if attempt < _MAX_RETRIES - 1:
+                    _retry_sleep(attempt, exc.retry_after)
+                continue
+            raise
+    if model == MODEL and FALLBACK_MODEL:
+        logger.info("Primary model %s failed in chat_text, falling back to %s", MODEL, FALLBACK_MODEL)
+        return _chat_text(messages, model=FALLBACK_MODEL)
+    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
+
+
+def call(system: str, user: str, model: str = MODEL) -> dict:
+    last_exc = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            with Client(timeout=120) as c:
+                r = c.post(
+                    URL,
+                    headers=_headers(),
+                    json={"model": model, "messages": _messages(system, [{"role": "user", "content": user}])},
+                )
+                _raise_for_status(r)
+                data = r.json()
+                text = _message_content(data)
+                text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                return json.loads(text)
+        except _RETRYABLE as exc:
+            last_exc = exc
+            logger.warning("Network error in call with %s (attempt %d/%d): %s", model, attempt + 1, _MAX_RETRIES, exc)
+            if attempt < _MAX_RETRIES - 1:
+                _retry_sleep(attempt)
+        except OpenRouterError as exc:
+            last_exc = exc
+            if exc.status_code in _RETRYABLE_STATUS:
+                logger.warning("Provider %s error %d in call (attempt %d/%d): %s", model, exc.status_code, attempt + 1, _MAX_RETRIES, exc.message)
+                if attempt < _MAX_RETRIES - 1:
+                    _retry_sleep(attempt, exc.retry_after)
+                continue
+            raise
+    if model == MODEL and FALLBACK_MODEL:
+        logger.info("Primary model %s failed in call, falling back to %s", MODEL, FALLBACK_MODEL)
+        return call(system, user, model=FALLBACK_MODEL)
+    raise OpenRouterError(502, message="Network error connecting to model provider. Please try again.") from last_exc
+
+
+def stream_chat(system: str, messages: list[dict], tools: list[dict] | None = None, tool_runner=None, on_tool_result=None):
+    chat_messages = _messages(system, messages)
+    if tools and tool_runner:
+        yield from _chat_with_tools(chat_messages, tools, tool_runner, on_tool_result)
+        return
+
+    emitted = False
+    try:
+        for token in _stream_chat(chat_messages):
+            emitted = True
+            yield token
+    except (HTTPError, json.JSONDecodeError) as exc:
+        _log_stream_fallback(exc)
+
+    if emitted:
+        return
+
+    text = _chat_text(chat_messages)
+    if text:
+        yield text
 
 
 def _stream_token(line: str) -> str:
