@@ -238,6 +238,9 @@ def _create_course_draft(arguments: dict) -> dict:
         raise ValueError(
             'fields must be a non-empty object containing only the fields to change, e.g. {"text_books": "new value"}. Do not pass all course data; only pass what should change.'
         )
+    for key in _ARRAY_FIELDS:
+        if key in fields:
+            fields[key] = _coerce_array(fields[key])
     row = first_row(supabase.table("refined_submissions").select("status").eq("id", refined_id))
     if not row:
         raise ValueError(f"Course with refined_id {refined_id} not found.")
@@ -255,6 +258,9 @@ def _update_agent_draft(arguments: dict) -> dict:
         raise ValueError(
             'fields must be a non-empty object containing only the fields to change, e.g. {"text_books": "new value"}.'
         )
+    for key in _ARRAY_FIELDS:
+        if key in fields:
+            fields[key] = _coerce_array(fields[key])
     row = first_row(supabase.table("agent_drafts").select("refined_id,proposed_json,status").eq("id", draft_id))
     if not row:
         raise ValueError(f"Draft with id {draft_id} not found.")
@@ -299,6 +305,18 @@ def _coerce_array(value):
                     return parsed
             except json.JSONDecodeError:
                 pass
+        lines = [line.strip() for line in stripped.splitlines()]
+        cleaned = []
+        for line in lines:
+            for prefix in ("- ", "• ", "* "):
+                if line.startswith(prefix):
+                    line = line[len(prefix):]
+                    break
+            line = line.strip()
+            if line:
+                cleaned.append(line)
+        if len(cleaned) > 1:
+            return cleaned
         return [stripped] if stripped else []
     return [value] if value is not None else []
 
@@ -401,10 +419,14 @@ def _create_document_draft(arguments: dict) -> dict:
     for course in courses:
         if not isinstance(course, dict):
             raise ValueError("each course must be an object")
+        fields = _require_dict(course, "fields")
+        for key in _ARRAY_FIELDS:
+            if key in fields:
+                fields[key] = _coerce_array(fields[key])
         records.append(
             draft_record(
                 int(course.get("refined_id")),
-                _require_dict(course, "fields"),
+                fields,
                 str(arguments.get("reason") or ""),
             )
         )
@@ -1229,10 +1251,10 @@ TOOLS: dict[str, AgentTool] = {
                         "required": ["unit_number", "title", "content", "hours"],
                     },
                 },
-                "objectives": {"type": "string"},
-                "course_outcomes": {"type": "string"},
-                "text_books": {"type": "string"},
-                "reference_books": {"type": "string"},
+                "objectives": {"type": "string", "description": "Newline-separated list of learning objectives, e.g. 'Use HTML5 to build web pages.\nApply CSS for styling.'"},
+                "course_outcomes": {"type": "string", "description": "Newline-separated list of measurable course outcomes, e.g. 'Develop web pages using HTML5.\nCreate interactive UIs.'"},
+                "text_books": {"type": "string", "description": "Newline-separated list of textbook references, e.g. 'Author, Title, Edition, Publisher, Year.'"},
+                "reference_books": {"type": "string", "description": "Newline-separated list of reference book references."},
                 "lab_experiments": {"type": "string"},
                 "tools_languages": {"type": "string"},
                 "prelude": {"type": "string"},

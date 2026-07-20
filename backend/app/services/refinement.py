@@ -307,11 +307,8 @@ def _units(value) -> list[dict]:
 def _assign_hours(units: list[dict], total_hours: int) -> list[dict]:
     if not units:
         return units
-    if sum(unit["hours"] for unit in units) == total_hours:
-        return units
-    base, extra = divmod(total_hours, len(units))
-    for index, unit in enumerate(units):
-        unit["hours"] = base + (1 if index < extra else 0)
+    for unit in units:
+        unit["hours"] = 14
     return units
 
 
