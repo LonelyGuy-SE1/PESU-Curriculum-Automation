@@ -16,6 +16,7 @@ def test_preload_pdfs_generates_for_each_year():
          patch("app.routes.preview.threading.Thread") as mock_thread_cls:
         mock_thread = MagicMock()
         mock_thread_cls.return_value = mock_thread
+        mock_cache.get.return_value = None
 
         preload_pdfs()
 
@@ -27,8 +28,8 @@ def test_preload_pdfs_generates_for_each_year():
         worker()
 
     assert calls == ["2025-2026", "2026-2027"]
-    mock_cache.put.assert_any_call("full_pdf:2025-2026", b"fake-pdf-bytes", ttl=3600)
-    mock_cache.put.assert_any_call("full_pdf:2026-2027", b"fake-pdf-bytes", ttl=3600)
+    mock_cache.put.assert_any_call("full_pdf:2025-2026", b"fake-pdf-bytes", ttl=600)
+    mock_cache.put.assert_any_call("full_pdf:2026-2027", b"fake-pdf-bytes", ttl=600)
 
 
 def test_preload_pdfs_skips_when_no_years():

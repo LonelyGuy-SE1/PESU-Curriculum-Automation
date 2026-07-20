@@ -70,15 +70,20 @@ def list_versions():
             current_rows = supabase.table("refined_submissions").select("*").in_("status", ["refined"]).execute().data
             current_rows = attach_submissions(current_rows)
             current_map = {row["id"]: build_course_preview(row) for row in current_rows}
+            current_rids = set(current_map.keys())
             for row in rows:
                 vid = row["id"]
                 v_courses = version_courses.get(vid, {})
                 has_changes = False
-                for rid, v_json in v_courses.items():
-                    c_json = current_map.get(rid, {})
-                    if v_json != c_json:
-                        has_changes = True
-                        break
+                version_rids = set(v_courses.keys())
+                if current_rids - version_rids:
+                    has_changes = True
+                if not has_changes:
+                    for rid, v_json in v_courses.items():
+                        c_json = current_map.get(rid, {})
+                        if v_json != c_json:
+                            has_changes = True
+                            break
                 row["has_changes"] = has_changes
         else:
             for row in rows:

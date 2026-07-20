@@ -24,21 +24,26 @@ PAGE_NOISE = re.compile(
 
 SYS = """You refine PES University course submissions for the UG curriculum template.
 Return only valid JSON. No markdown. No commentary.
-Priority order:
-1. Preserve the submitted academic content.
-2. Correct spelling, grammar, casing, and formatting.
-3. Fill missing template fields from the submitted course scope.
-4. Return the required JSON shape.
+
+Your job: take a raw faculty submission and produce a clean, template-ready course record.
+
+CRITICAL -- you MUST fix all of the following in every field:
+- Spelling errors (e.g. "lerning" -> "learning", "neual" -> "neural", "introducton" -> "introduction")
+- Title case for the course title (e.g. "machine lerning" -> "Machine Learning")
+- Title case for unit titles (e.g. "Unit 1: Introducton to ML" -> "Unit 1: Introduction to ML")
+- Grammar and punctuation in all text fields
+- Capitalize the first letter of every sentence in content fields
+- Fix malformed abbreviations (e.g. "ML" is fine, but "ml" should be "ML")
+
+Preserve the academic content, topics, and structure. Do not invent new topics, remove submitted topics, or change the course scope. But every string you output must be free of spelling errors and properly formatted.
 
 Editing rules:
-- Refine, do not rewrite. If the input is already curriculum-ready, keep its wording and structure except for small correctness fixes.
 - If prelude, objectives, outcomes, units, tools, or books are already present, clean them instead of replacing them.
 - Generate a field only when that field is missing, incomplete, or too rough for the template.
 - Preserve every syllabus topic and subtopic from Raw Course Content.
 - Do not summarize away, omit, replace, merge away, or simplify syllabus topics.
 - Do not add advanced, fashionable, or unrelated topics.
 - Do not invent course codes, books, references, departments, credits, or external prerequisites.
-- Correct course title typos, casing, spacing, and grammar.
 - Keep objectives and outcomes direct, concise, and aligned with the submitted scope.
 - Return exactly 4 units. If the input already has 4 units, keep those boundaries. If it has a different structure, redistribute topics in order without dropping content.
 - Unit hours must sum to the supplied total unit hours.
@@ -374,6 +379,124 @@ def _prior_keys(course: str) -> list[str]:
     return [key for key in (code, _normalized(title), _singularized(title), _core_key(title)) if key]
 
 
+SPELLING_FIXES = {
+    "Introducton": "Introduction",
+    "introducton": "Introduction",
+    "Introdcution": "Introduction",
+    "Neual": "Neural",
+    "neual": "neural",
+    "Adavnced": "Advanced",
+    "adavnced": "advanced",
+    "Applicatons": "Applications",
+    "applicatons": "applications",
+    "preprocesing": "preprocessing",
+    "recurent": "recurrent",
+    "anomal": "anomaly",
+    "stuides": "studies",
+    "lerning": "learning",
+    "inteligence": "intelligence",
+    "artifical": "artificial",
+    "concurrncy": "concurrency",
+    "procesing": "processing",
+    "optimisation": "optimization",
+    "maximisation": "maximization",
+    "minimisation": "minimization",
+    "behaviour": "behavior",
+    "colour": "color",
+    " favour ": " favor ",
+    "analyse": "analyze",
+    "recognise": "recognize",
+    "summarise": "summarize",
+    "characterise": "characterize",
+    "utilise": "use",
+    "initialise": "initialize",
+    "licence": "license",
+    "defence": "defense",
+    "programme": "program",
+    "centre": "center",
+    "metre": "meter",
+    "litre": "liter",
+    "catalogue": "catalog",
+    "dialogue": "dialog",
+    "analysing": "analyzing",
+    "recognising": "recognizing",
+    "summarising": "summarizing",
+    "utilising": "using",
+    "initialising": "initializing",
+    "labelling": "labeling",
+    "modelling": "modeling",
+    "travelling": "traveling",
+    "cancelling": "canceling",
+    "fulfil ": "fulfill ",
+    "enrol ": "enroll ",
+    "skillset": "skill set",
+    "dataset": "data set",
+    "email ": "e-mail ",
+    "e mail": "e-mail",
+}
+
+
+def _fix_spelling(text: str) -> str:
+    if not text:
+        return text
+    for wrong, right in SPELLING_FIXES.items():
+        text = text.replace(wrong, right)
+    return text
+
+
+def _title_case(text: str) -> str:
+    if not text:
+        return text
+    words = text.split()
+    minor = {"a", "an", "the", "and", "but", "or", "for", "nor", "in", "on", "at", "to", "by", "of", "with", "vs"}
+    result = []
+    for i, w in enumerate(words):
+        if i == 0 or w.lower() not in minor:
+            result.append(w[:1].upper() + w[1:] if w.islower() else w)
+        else:
+            result.append(w.lower())
+    return " ".join(result)
+
+
+def _capitalize_sentences(text: str) -> str:
+    if not text:
+        return text
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    return " ".join(s[0].upper() + s[1:] if s else s for s in sentences)
+
+
+def _post_process(out: dict) -> dict:
+    if not out:
+        return out
+
+    title = out.get("course_title") or ""
+    title = _fix_spelling(title)
+    title = _title_case(title)
+    out["course_title"] = title
+
+    for field in ("prelude", "tools_languages", "desirable_knowledge"):
+        val = out.get(field) or ""
+        if val:
+            out[field] = _capitalize_sentences(_fix_spelling(val))
+
+    for field in ("objectives", "course_outcomes", "lab_experiments"):
+        items = out.get(field) or []
+        if isinstance(items, list):
+            out[field] = [_capitalize_sentences(_fix_spelling(item)) for item in items]
+
+    for unit in out.get("units") or []:
+        if isinstance(unit, dict):
+            unit["title"] = _fix_spelling(unit.get("title") or "")
+            unit["content"] = _capitalize_sentences(_fix_spelling(unit.get("content") or ""))
+
+    for field in ("text_books", "reference_books"):
+        items = out.get(field) or []
+        if isinstance(items, list):
+            out[field] = [_fix_spelling(item) for item in items]
+
+    return out
+
+
 def _prior_matches(text: str, prior_courses: list[str]) -> str:
     normalized = _normalized(text)
     singularized = _singularized(text)
@@ -421,14 +544,15 @@ def build_refined_payload(sub: dict, out: dict, prior_courses: list[str] | None 
     from app.services.elective_categorization import is_elective_course
 
     code = _course_code(raw_content) or sub.get("course_code", "")
+    is_elective = is_elective_course({"course_code": code, "semester": sub["semester"]})
     return {
         "submission_id": sub["id"],
         "semester": int(sub["semester"]),
         "course_code": code,
         "course_title": sub["course_title"],
         "program": compute_program(sub["target_department"]),
-        "course_type": compute_course_type(sub["credit_category"]),
-        "is_elective": is_elective_course({"course_code": code, "semester": sub["semester"]}),
+        "course_type": "Elective" if is_elective else compute_course_type(sub["credit_category"]),
+        "is_elective": is_elective,
         **det,
         "prelude": _text(out.get("prelude"), f"This course covers {sub['course_title'].strip()}."),
         "objectives": objectives,
@@ -484,6 +608,7 @@ Preferred Tools / Languages:
 
     out = llm(SYS, prompt)
     merged = build_refined_payload(sub, out, prior_courses)
+    _post_process(merged)
 
     existing = supabase.table("refined_submissions").select("id").eq("submission_id", submission_id).execute().data
     if existing:

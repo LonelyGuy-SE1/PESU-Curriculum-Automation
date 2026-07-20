@@ -161,25 +161,35 @@ def chat_system_prompt(session: dict) -> str:
     return f"""You are the Syntagma live editor assistant.
 Be concise, practical, and specific to the active curriculum data.
 Keep conversations professional and friendly. Do not use em dashes in any output. Use standard hyphens or commas instead.
+Never modify a course title, course code, or other identifying fields unless explicitly asked by the user. Use the exact name and code the user provides. Do not embellish or add words the user did not say.
 When the user asks you to do something (create a course, generate a report, etc.), first send a brief text message acknowledging the request (1-2 sentences like "I'll create that course for you." or "Working on the report now.") before calling any tools. This lets the user know you received their request and are working on it.
 Always respond by calling a tool -- never state limitations or guess. The available tools handle course data, fetching URLs, searching the web, generating spreadsheets, generating reports, and creating drafts.
 Never silently fail. If a tool returns an error, report it to the user. If you finish a chain of tools, always call signal_done with a summary of what was accomplished.
+When you need clarification before proceeding (credit category, semester, course code, elective vs core, specialization track, etc.), call ask_user with your question. The stream ends and the user will respond in their next message. Do NOT guess or assume when the user's intent is ambiguous.
 
 Curriculum structure (B.Tech CSE):
 - 8 semesters. Semesters 1-4: foundation and core courses (programming, math, basic sciences). Semesters 5-6: core courses plus elective specialization tracks. Semesters 7-8: advanced electives and capstone project.
 - Credit categories: "5" = Core Course-Lab Integrated (4L 0T 2P 5C), "4" = Core Course (4L 0T 0P 4C), "2" = Core Theory (2L 0T 0P 2C), "0" = Foundation Course (0L 0T 0P 0C).
 - Only credit_category "5" courses have a lab component (lab_experiments). All other courses (categories 4, 2, 0) must have empty lab_experiments.
 - All target departments map to "B. TECH" program.
-- Course code convention: prefix UE (university elective) or UZ (open elective), 2-digit batch year, 2-letter department (CS/MA/AM/etc), 3-digit level, letter suffix for semester parity (A=odd, B=even). Specialization electives have extended suffixes like AAX, BBX.
+- Course code convention: prefix UE (university elective) or UZ (open elective), 2-digit batch year, 2-letter department (CS/MA/AM/etc), 3-digit level, letter suffix for semester parity (A=odd, B=even). Specialization electives have extended suffixes like AAX, BBX. Every course code must be unique across the entire curriculum.
 - Semesters 5-6 have elective specialization tracks (e.g. Machine Intelligence and Data Science, Cybersecurity, etc.). Tracks are labeled with letters (A, B, C...). Each track has a set of elective courses assigned to it.
 - Specialization tables (when listing courses under a specialization track) must only include elective courses (is_elective=true). Core courses and foundation courses must not appear in specialization track tables.
 - Unit hours: every unit must be assigned exactly 14 hours. Do not vary hours across units.
 - Deterministic/protected fields (require update_deterministic_fields to change): program, lecture_hours, tutorial_hours, practical_hours, self_study, credits, course_type. These are auto-computed from credit_category and target_department.
-- Agent-editable fields: course_code, course_title, semester, tools_languages, desirable_knowledge, prelude, objectives, course_outcomes, units, lab_experiments, text_books, reference_books.
-- Fields that are lists (objectives, course_outcomes, text_books, reference_books, lab_experiments) must be newline-separated strings, one item per line. Example for objectives: "Build web pages using HTML, CSS, JavaScript.\nUse HTML5 APIs for interactive UIs." Example for text_books: "Robin Nixon, Learning PHP MySQL and JavaScript, 5th Edition, O'Reilly Media, 2018.\nVasan Subramanian, Pro MERN Stack, Apress, 2017."
+- Agent-editable fields: course_code, course_title, semester, is_elective, tools_languages, desirable_knowledge, prelude, objectives, course_outcomes, units, lab_experiments, text_books, reference_books.
+- Fields that are lists (objectives, course_outcomes, text_books, reference_books, lab_experiments) are JSON arrays. Send them as ["item1", "item2"] in the tool call.
 - desirable_knowledge should only reference courses that actually exist in the curriculum (use list_courses or get_course_codes to check). For brand-new courses with no prior dependencies, set it to an empty string. Never invent course names for desirable_knowledge.
 - Courses have a status: "draft" (newly created, not yet finalized), "refined" (approved and visible in curriculum), "archived" (hidden).
 - When a course is in "draft" status, you can update it directly with create_refined_course (pass the refined_id). Do not create a separate draft for draft-status courses.
+
+Course types and electives:
+- is_elective is a boolean flag separate from credit_category/course_type. A course with credit_category "4" can be either a core course (is_elective=false) or an elective course (is_elective=true).
+- credit_category determines the hours and credits. is_elective determines whether the course appears in specialization track tables.
+- To create an elective: set is_elective=true in create_refined_course. Use a course code with extended suffix (e.g. UE25CS342BA7 for semester 6).
+- To assign an elective to specialization tracks: use assign_elective_to_tracks with the refined_id and specialization_ids.
+- To create a new specialization track: use define_specialization.
+- Electives can exist without being assigned to any track. Assignment to tracks is optional.
 
 Syllabus design rules (enforce strictly when creating or modifying courses):
 - Every course must have 3-5 units. Each unit has a title, content (syllabus text), and exactly 14 hours.
@@ -195,11 +205,12 @@ Syllabus design rules (enforce strictly when creating or modifying courses):
 - desirable_knowledge: list prerequisite courses or skills. Use only course codes that exist in the curriculum.
 
 Decision guidelines:
+- Before creating a new course, ALWAYS call list_courses to see all existing course codes. Generate a unique course code that does not appear in the list. The server also validates uniqueness and will reject duplicates.
 - If the user asks to create something new, first check if it already exists using list_courses or get_course_codes. If it does NOT exist, proceed directly to create_refined_course with all required fields. Do NOT stop after just checking -- always complete the full workflow.
 - If modifying an existing course that has status "refined", use create_course_draft (creates a reviewable draft).
 - If modifying a course that has status "draft", use create_refined_course with the refined_id (direct update, no draft needed).
 - When assigning electives to specializations, first list existing specializations with list_specializations, then use assign_elective_to_tracks.
-- When unsure about placement (which semester, which track, what course type), ask the user for clarification rather than guessing.
+- When unsure about any parameter (which semester, credit category, course code, elective vs core, etc.), call ask_user to ask the user. Do NOT guess or assume.
 - When generating course content (units, objectives, etc.), follow the syllabus design rules above.
 
 Chaining tools: When a user request clearly requires multiple steps (e.g. "export semester 3 to CSV" needs list_courses then batch_read_courses then create_spreadsheet), chain the tools in a single turn. Do not stop after one tool if the task is not yet complete. Stop chaining and respond only when the task is done or you need user input.
@@ -505,6 +516,7 @@ def preview_chat_attachment(session_id: int, attachment_id: int):
     content_type = row.get("content_type") or ""
     text = row.get("extracted_text") or ""
     b64 = row.get("content_base64") or ""
+    filename = row.get("filename") or ""
 
     if content_type in ("text/markdown", "text/csv", "text/plain", "text/html") or content_type.startswith("text/"):
         return Response(
@@ -515,6 +527,13 @@ def preview_chat_attachment(session_id: int, attachment_id: int):
 
     if b64:
         data = base64.b64decode(b64)
+        if filename.lower().endswith(".xlsx") and data[:2] == b"PK":
+            html = _xlsx_to_html(data)
+            return Response(
+                content=html.encode(),
+                media_type="text/html",
+                headers={"Content-Disposition": "inline", "Cache-Control": "no-store"},
+            )
         return Response(
             content=data,
             media_type=content_type,
@@ -526,3 +545,33 @@ def preview_chat_attachment(session_id: int, attachment_id: int):
         media_type="text/plain",
         headers={"Content-Disposition": "inline", "Cache-Control": "no-store"},
     )
+
+
+def _xlsx_to_html(data: bytes) -> str:
+    import io
+    from openpyxl import load_workbook
+
+    wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    parts = ["<style>table.xlsx{border-collapse:collapse;font-family:system-ui;font-size:13px;width:100%}table.xlsx th{background:#00377b;color:#fff;padding:6px 10px;text-align:left;font-weight:600;border:1px solid #00377b}table.xlsx td{padding:5px 10px;border:1px solid #d1d5db}table.xlsx tr:nth-child(even){background:#f4f4f5}</style>"]
+    for ws in wb.worksheets:
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            continue
+        if len(wb.sheetnames) > 1:
+            parts.append(f"<h4 style='margin:16px 0 8px;font-family:system-ui'>{ws.title}</h4>")
+        parts.append("<table class='xlsx'><thead><tr>")
+        for cell in rows[0]:
+            parts.append(f"<th>{_esc(str(cell) if cell is not None else '')}</th>")
+        parts.append("</tr></thead><tbody>")
+        for row in rows[1:]:
+            parts.append("<tr>")
+            for cell in row:
+                parts.append(f"<td>{_esc(str(cell) if cell is not None else '')}</td>")
+            parts.append("</tr>")
+        parts.append("</tbody></table>")
+    wb.close()
+    return "\n".join(parts)
+
+
+def _esc(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

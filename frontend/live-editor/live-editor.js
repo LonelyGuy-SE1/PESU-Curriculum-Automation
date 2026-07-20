@@ -303,11 +303,18 @@ async function restoreSelectedVersion() {
 }
 
 function chatScopeQuery() {
-  return activeCourseId ? `?refined_id=${encodeURIComponent(activeCourseId)}` : "";
+  return "";
 }
 
 function sessionTitle(item) {
-  if (item.title) return item.title;
+  if (item.title) {
+    if (item.refined_id && !item.title.includes("Course " + item.refined_id)) {
+      const courseOpt = course.querySelector(`option[value="${item.refined_id}"]`);
+      const courseName = courseOpt ? courseOpt.textContent.split(" - ").pop().trim() : "";
+      if (courseName && !item.title.includes(courseName)) return `${courseName}: ${item.title}`;
+    }
+    return item.title;
+  }
   const date = item.created_at ? new Date(item.created_at).toLocaleDateString() : "";
   return date ? `Thread ${item.id} - ${date}` : `Thread ${item.id}`;
 }
@@ -546,9 +553,14 @@ async function openPreview(file) {
       const html = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(preprocessUrls(text))) : marked.parse(preprocessUrls(text));
       previewBody.innerHTML = `<div class="preview-rendered">${html}</div>`;
     } else if (mime.includes("spreadsheet") || mime.includes("excel") || name.endsWith(".xlsx") || name.endsWith(".csv")) {
-      const text = await response.text();
-      const table = csvToTable(text, name.endsWith(".csv"));
-      previewBody.innerHTML = table;
+      if (name.endsWith(".xlsx")) {
+        const html = await response.text();
+        previewBody.innerHTML = html;
+      } else {
+        const text = await response.text();
+        const table = csvToTable(text, true);
+        previewBody.innerHTML = table;
+      }
     } else if (mime.includes("word") || name.endsWith(".doc") || name.endsWith(".docx")) {
       const text = await response.text();
       previewBody.innerHTML = `<pre class="preview-text">${escapeHtml(text)}</pre>`;
@@ -1089,6 +1101,7 @@ async function loadCourseForReview(id) {
   queuedFiles = [];
   renderDraftAttachments();
   setTab("fields");
+  ensureChatSession().catch(() => {});
 }
 
 async function refreshPendingCourses() {

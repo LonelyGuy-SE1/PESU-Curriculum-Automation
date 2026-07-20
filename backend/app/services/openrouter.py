@@ -17,25 +17,35 @@ FALLBACK_MODEL = os.environ.get("OPENROUTER_FALLBACK_MODEL", "").strip() or None
 logger = logging.getLogger(__name__)
 
 _context_length: int | None = None
+_last_fetch_attempt: float = 0.0
 
 
 def fetch_context_length() -> int:
-    global _context_length
+    global _context_length, _last_fetch_attempt
     if _context_length is not None:
         return _context_length
+    now = time.time()
+    if now - _last_fetch_attempt < 60:
+        return _context_length or 128000
+    _last_fetch_attempt = now
     api_base = URL.rsplit("/chat/completions", 1)[0]
     try:
-        with Client(timeout=10) as client:
+        with Client(timeout=15) as client:
             resp = client.get(f"{api_base}/model/{MODEL}", headers=_headers())
             resp.raise_for_status()
             data = resp.json().get("data") or {}
             _context_length = int(data.get("context_length") or 128000)
             logger.info("Model %s context_length=%d", MODEL, _context_length)
             return _context_length
+    except HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            logger.debug("Model info endpoint not available for %s (provider does not support it)", MODEL)
+        else:
+            logger.warning("Failed to fetch context_length for %s: %s", MODEL, exc)
+        return 128000
     except Exception as exc:
         logger.warning("Failed to fetch context_length for %s: %s", MODEL, exc)
-        _context_length = 128000
-        return _context_length
+        return 128000
 
 
 def context_length() -> int:
@@ -75,6 +85,7 @@ _TOOL_LABELS = {
     "create_curriculum_version": "Creating snapshot",
     "get_course_draft": "Reading draft",
     "remove_elective_from_tracks": "Removing elective",
+    "ask_user": "Asking user",
     "get_preview_url": "Getting preview URL",
     "list_courses": "Looking up courses",
     "update_agent_draft": "Updating draft",
@@ -246,8 +257,12 @@ def _chat_with_tools(messages: list[dict], tools: list[dict], tool_runner, on_to
             if last_prompt_tokens:
                 yield {"$usage": {"prompt_tokens": last_prompt_tokens, "context_length": context_length()}}
             return
-
         messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": tool_calls})
+
+        ack_text = str(message.get("content") or "").strip()
+        if ack_text:
+            yield ack_text
+
         done = False
         result = {}
         for tool_call in tool_calls:

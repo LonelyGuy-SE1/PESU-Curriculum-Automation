@@ -68,6 +68,7 @@ REFINED_FIELDS = {
     "self_study",
     "credits",
     "course_type",
+    "is_elective",
     "tools_languages",
     "desirable_knowledge",
     "prelude",
@@ -177,6 +178,12 @@ def update_refined_fields(refined_id: int, fields: dict) -> dict | None:
                 update[key] = int(update[key] or 0)
             except (TypeError, ValueError) as exc:
                 raise ValueError(f"Invalid value for {key}: {update[key]!r}. Must be a number.") from exc
+    is_elective = update.get("is_elective")
+    if is_elective is None:
+        existing = first_row(supabase.table("refined_submissions").select("is_elective").eq("id", refined_id))
+        is_elective = existing.get("is_elective") if existing else False
+    if is_elective:
+        update["course_type"] = "Elective"
     result = supabase.table("refined_submissions").update(update).eq("id", refined_id).execute()
     invalidate_curriculum_cache()
     return result.data[0] if result.data else None

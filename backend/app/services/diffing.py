@@ -73,6 +73,11 @@ def diff_course(old: dict, new: dict) -> dict:
     topics_old = _topics(syllabus_old)
     topics_new = _topics(syllabus_new)
 
+    def _is_protected(field: str) -> bool:
+        if field == "course_type" and new.get("is_elective"):
+            return False
+        return field in PROTECTED_FIELDS
+
     return {
         "json_patch": patch,
         "patch_operations": len(patch),
@@ -80,7 +85,7 @@ def diff_course(old: dict, new: dict) -> dict:
         "syllabus_change_percent": _change_percent(syllabus_old, syllabus_new),
         "topics_added": sorted(topics_new - topics_old),
         "topics_removed": sorted(topics_old - topics_new),
-        "protected_changes": sorted(field for field in PROTECTED_FIELDS if _field_value(old, field) != _field_value(new, field)),
+        "protected_changes": sorted(field for field in PROTECTED_FIELDS if _is_protected(field) and _field_value(old, field) != _field_value(new, field)),
         "unified_diff": "\n".join(
             difflib.unified_diff(
                 old_text.splitlines(),
@@ -96,6 +101,8 @@ def diff_course(old: dict, new: dict) -> dict:
 def validate_draft(old: dict, new: dict) -> list[str]:
     issues = []
     for field in PROTECTED_FIELDS:
+        if field == "course_type" and new.get("is_elective"):
+            continue
         if _field_value(old, field) != _field_value(new, field):
             issues.append(f"{field} is deterministic and cannot be changed by an agent draft")
     return issues
@@ -107,6 +114,8 @@ def merge_fields(base: dict, fields: dict) -> dict:
         if key in PROTECTED_FIELDS and str(base.get(key) or "") == str(value or ""):
             value = base.get(key)
         merged[key] = value
+    if merged.get("is_elective"):
+        merged["course_type"] = "Elective"
     return merged
 
 

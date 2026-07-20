@@ -332,9 +332,10 @@ def _create_refined_course(arguments: dict) -> dict:
     target_dept = str(arguments.get("target_department") or "CSE")
     det = compute_hours(credit_category)
 
+    is_elective = bool(arguments.get("is_elective"))
     computed = {
         "program": compute_program(target_dept),
-        "course_type": compute_course_type(credit_category),
+        "course_type": "Elective" if is_elective else compute_course_type(credit_category),
         "status": "draft",
     }
     for key in (
@@ -360,9 +361,23 @@ def _create_refined_course(arguments: dict) -> dict:
     dk = str(fields.get("desirable_knowledge") or "").strip()
     if dk and dk.lower() in ("none", "n/a", "na", "-"):
         fields["desirable_knowledge"] = ""
+    if "is_elective" in arguments:
+        fields["is_elective"] = bool(arguments["is_elective"])
     fields.update(computed)
 
     refined_id = arguments.get("refined_id")
+    if not refined_id and "course_code" in fields:
+        dup = (
+            supabase.table("refined_submissions")
+            .select("id")
+            .eq("course_code", fields["course_code"])
+            .limit(1)
+            .execute()
+            .data
+        )
+        if dup:
+            return {"error": f"Course code {fields['course_code']} already exists (refined_id: {dup[0]['id']}). Pick a unique code."}
+
     if refined_id:
         result = (
             supabase.table("refined_submissions")
@@ -807,6 +822,13 @@ def _signal_done(arguments: dict) -> dict:
     return {"done": True, "summary": summary}
 
 
+def _ask_user(arguments: dict) -> dict:
+    question = str(arguments.get("question") or "").strip()
+    if not question:
+        raise ValueError("question is required")
+    return {"asked": True, "question": question, "done": True, "summary": question}
+
+
 def _create_spreadsheet(arguments: dict) -> dict:
     """Generate CSV or Excel file from rows data and save as chat attachment."""
     session_id = _require_int(arguments, "session_id")
@@ -1237,6 +1259,10 @@ TOOLS: dict[str, AgentTool] = {
                     "description": "CSE, ECE, ME, BT, EEE, AIML",
                 },
                 "credit_category": {"type": "string", "description": "0, 2, 4, or 5"},
+                "is_elective": {
+                    "type": "boolean",
+                    "description": "Set true for elective courses (specialization electives in semesters 5-6). Default false (core course).",
+                },
                 "units": {
                     "type": "array",
                     "description": "Course units. Each unit must have unit_number (int), title (str), content (str, the syllabus text), and hours (int).",
@@ -1251,11 +1277,11 @@ TOOLS: dict[str, AgentTool] = {
                         "required": ["unit_number", "title", "content", "hours"],
                     },
                 },
-                "objectives": {"type": "string", "description": "Newline-separated list of learning objectives, e.g. 'Use HTML5 to build web pages.\nApply CSS for styling.'"},
-                "course_outcomes": {"type": "string", "description": "Newline-separated list of measurable course outcomes, e.g. 'Develop web pages using HTML5.\nCreate interactive UIs.'"},
-                "text_books": {"type": "string", "description": "Newline-separated list of textbook references, e.g. 'Author, Title, Edition, Publisher, Year.'"},
-                "reference_books": {"type": "string", "description": "Newline-separated list of reference book references."},
-                "lab_experiments": {"type": "string"},
+                "objectives": {"type": "array", "items": {"type": "string"}, "description": "Learning objectives. Send as JSON array of strings."},
+                "course_outcomes": {"type": "array", "items": {"type": "string"}, "description": "Measurable course outcomes. Send as JSON array of strings."},
+                "text_books": {"type": "array", "items": {"type": "string"}, "description": "Textbook references with author, title, edition, publisher, year. Send as JSON array."},
+                "reference_books": {"type": "array", "items": {"type": "string"}, "description": "Reference books. Send as JSON array."},
+                "lab_experiments": {"type": "array", "items": {"type": "string"}, "description": "Lab experiments (only for credit_category 5). Send as JSON array."},
                 "tools_languages": {"type": "string"},
                 "prelude": {"type": "string"},
                 "desirable_knowledge": {"type": "string"},
@@ -1555,6 +1581,21 @@ TOOLS: dict[str, AgentTool] = {
             "required": ["summary"],
         },
         _signal_done,
+    ),
+    "ask_user": AgentTool(
+        "ask_user",
+        "Ask the user a clarifying question before proceeding. Call this when you need more information (credit category, semester, course code, elective vs core, etc.). The stream ends after this tool, and the user will respond in their next message.",
+        {
+            **OBJECT,
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "The question to ask the user",
+                },
+            },
+            "required": ["question"],
+        },
+        _ask_user,
     ),
     "create_spreadsheet": AgentTool(
         "create_spreadsheet",

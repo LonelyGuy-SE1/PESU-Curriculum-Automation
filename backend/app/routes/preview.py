@@ -223,7 +223,9 @@ def preload_pdfs() -> None:
             t0 = _time.monotonic()
             pdf = _generate_pdf(cy)
             if pdf:
-                cache.put(f"full_pdf:{cy}", pdf, ttl=3600)
+                existing = cache.get(f"full_pdf:{cy}")
+                if existing is None:
+                    cache.put(f"full_pdf:{cy}", pdf, ttl=600)
                 elapsed = (_time.monotonic() - t0) * 1000
                 logger.info("PDF preload complete for year=%s in %dms (%d bytes)", cy, elapsed, len(pdf))
             else:
