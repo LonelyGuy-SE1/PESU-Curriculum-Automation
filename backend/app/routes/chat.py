@@ -158,7 +158,7 @@ def chat_system_prompt(session: dict) -> str:
         context = stable_context({"active_session_id": session_id, **load_document_draft(int(session["document_draft_id"]))})
     else:
         context = stable_context({"active_session_id": session_id})
-    return f"""You are the PESU Curriculum Automation live editor assistant.
+    return f"""You are the Syntagma live editor assistant.
 Be concise, practical, and specific to the active curriculum data.
 Keep conversations professional and friendly. Do not use em dashes in any output. Use standard hyphens or commas instead.
 When the user asks you to do something (create a course, generate a report, etc.), first send a brief text message acknowledging the request (1-2 sentences like "I'll create that course for you." or "Working on the report now.") before calling any tools. This lets the user know you received their request and are working on it.
@@ -270,7 +270,7 @@ def create_chat_session(payload: ChatSessionPayload):
     elif payload.document_draft_id:
         starter = f"👋 Hello! I'm ready to help with document draft **{payload.document_draft_id}**. You can ask me to:\n\n- Review the proposed changes across multiple courses\n- Compare draft versions\n- Generate a summary report\n\nWhat would you like to do?"
     else:
-        starter = "👋 Hello! I'm your PESU Curriculum assistant. You can ask me to:\n\n- Browse the curriculum with `get_curriculum_json`\n- Inspect specific courses with granular tools\n- Create drafts for course changes\n- Generate reports and comparisons\n\nWhat would you like to explore?"
+        starter = "👋 Hello! I'm your Syntagma assistant. You can ask me to:\n\n- Browse the curriculum with `get_curriculum_json`\n- Inspect specific courses with granular tools\n- Create drafts for course changes\n- Generate reports and comparisons\n\nWhat would you like to explore?"
 
     supabase.table("chat_messages").insert({
         "session_id": session_id,

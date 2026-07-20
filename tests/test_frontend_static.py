@@ -114,7 +114,7 @@ def test_frontend_routes_mount(monkeypatch):
 
     client = TestClient(app)
     expected = {
-        "/": "PESU Curriculum Automation",
+        "/": "Syntagma",
         "/form/": "Submit Course",
         "/courses/": "Courses",
         "/preview/": "Preview",

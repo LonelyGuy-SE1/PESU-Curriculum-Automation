@@ -120,6 +120,7 @@ const TOOL_LABELS = {
 
 let activeCourseId = "";
 let activeDraftId = "";
+let activeDraftRefinedId = "";
 let activeDocumentDraftId = "";
 let activeSessionId = "";
 let chatLoadSeq = 0;
@@ -739,6 +740,7 @@ async function readEventStream(response, onEvent) {
 
 function resetReview() {
   activeDraftId = "";
+  activeDraftRefinedId = "";
   activeDocumentDraftId = "";
   reviewSummary.replaceChildren(document.createTextNode("No draft loaded."));
   renderDiff("");
@@ -801,6 +803,7 @@ function summaryLine(label, value) {
 function renderDraftReview(draftRow) {
   const summary = draftRow.diff_summary || {};
   activeDraftId = String(draftRow.id || "");
+  activeDraftRefinedId = String(draftRow.refined_id || "");
   reviewSummary.replaceChildren(
     summaryLine("Draft", activeDraftId || "unsaved"),
     summaryLine("Status", draftRow.status || ""),
@@ -1007,6 +1010,7 @@ async function loadVersionInEditor(versionId) {
 async function loadDocumentPreview() {
   activeCourseId = "";
   activeDraftId = "";
+  activeDraftRefinedId = "";
   versionMode = false;
   viewMode.value = "document";
   save.disabled = true;
@@ -1319,36 +1323,51 @@ previewDraft.addEventListener("click", () => {
 applyDraft.addEventListener("click", async () => {
   if (!activeDraftId && !activeDocumentDraftId) return;
   if (!await showConfirm("Apply this draft? This will overwrite current course data.")) return;
+  applyDraft.disabled = true;
   setStatus("Applying draft...");
 
-  if (activeDocumentDraftId) {
-    const response = await fetch(`/api/agent/document-drafts/${activeDocumentDraftId}/apply`, { method: "POST" });
+  try {
+    if (activeDocumentDraftId) {
+      const response = await fetch(`/api/agent/document-drafts/${activeDocumentDraftId}/apply`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error(await errorMessage(response, "Apply failed"));
+      }
+      const body = await response.json();
+      if (body.version) {
+        setStatus(`Document draft applied. Version: ${body.version.name}`, "ready");
+        updateVersionDisplay(body.version.name);
+        await refreshVersions();
+      } else {
+        setStatus("Document draft applied.", "ready");
+      }
+      await loadDocumentPreview();
+      setTab("chat");
+      return;
+    }
+
+    const targetId = activeDraftRefinedId || activeCourseId || course.value;
+    const response = await fetch(`/api/agent/drafts/${activeDraftId}/apply`, { method: "POST" });
     if (!response.ok) {
       throw new Error(await errorMessage(response, "Apply failed"));
     }
     const body = await response.json();
     if (body.version) {
-      setStatus(`Document draft applied. Version saved: ${body.version.name}`, "ready");
+      setStatus(`Draft applied. Version: ${body.version.name}`, "ready");
+      updateVersionDisplay(body.version.name);
+      await refreshVersions();
     } else {
-      setStatus("Document draft applied.", "ready");
+      setStatus("Draft applied.", "ready");
     }
-    await loadDocumentPreview();
+    activeDraftId = "";
+    activeDraftRefinedId = "";
+    resetReview();
+    if (targetId) {
+      await loadCourse(targetId);
+    }
     setTab("chat");
-    return;
+  } finally {
+    applyDraft.disabled = false;
   }
-
-  const response = await fetch(`/api/agent/drafts/${activeDraftId}/apply`, { method: "POST" });
-  if (!response.ok) {
-    throw new Error(await errorMessage(response, "Apply failed"));
-  }
-  const body = await response.json();
-  if (body.version) {
-    setStatus(`Draft applied. Version saved: ${body.version.name}`, "ready");
-  } else {
-    setStatus("Draft applied.", "ready");
-  }
-  await loadCourse(activeCourseId || course.value);
-  setTab("chat");
 });
 
 loadDocumentDraft.addEventListener("click", () => loadDocumentDraftById(documentDraftSelect.value).catch(showError));

@@ -17,7 +17,7 @@ def client():
 # ---------------------------------------------------------------------------
 
 FRONTEND_PAGES = {
-    "/": "PESU Curriculum Automation",
+    "/": "Syntagma",
     "/form/": "Submit Course",
     "/courses/": "Courses",
     "/preview/": "Preview",

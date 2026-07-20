@@ -69,7 +69,7 @@ def _prewarm_cache():
     threading.Thread(target=_worker, daemon=True, name="cache-prewarm").start()
 
 
-app = FastAPI(title="PESU Curriculum Automation", lifespan=lifespan)
+app = FastAPI(title="Syntagma", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

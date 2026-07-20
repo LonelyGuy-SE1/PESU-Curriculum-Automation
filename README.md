@@ -7,9 +7,11 @@ app_port: 7860
 pinned: false
 ---
 
-# PESU Curriculum Automation
+# Syntagma
 
 <div align="center">
+
+**An Agentic Curriculum Lifecycle Management System for PES University**
 
 ![Python](https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.138-009688?style=flat-square&logo=fastapi&logoColor=white)
@@ -26,58 +28,116 @@ pinned: false
 
 </div>
 
-Automate PES University's B.Tech curriculum management: faculty submit raw course content, the system refines it via AI, and admins review, edit, and export the full curriculum as official A4 PDFs.
+Automate PES University's B.Tech curriculum management: faculty submit raw course content, the system refines it via AI, and admins review, edit, and export the full curriculum as official A4 PDFs. The AI agent never applies changes directly -- it proposes reviewable drafts, keeping the human in full control.
 
 ## Live Demo
 
-**[pesucurriculum.lonelyguy.tech](https://pesucurriculum.lonelyguy.tech/)** (preferred, works across browsers)
+**[syntagma.lonelyguy.tech](https://syntagma.lonelyguy.tech/)** (preferred, works across browsers)
 
-Backup: [HF Space](https://huggingface.co/spaces/Lonelyguyse1/Curriculum-Backend) (may have compatibility issues on some browsers)
+Backup: [pesucurriculum.vercel.app](https://pesucurriculum.vercel.app/)
 
 ## Architecture
 
 ```mermaid
-flowchart LR
-    F[Faculty] -->|submits raw content| Form[Form]
-    Form -->|POST /api/submissions| API[FastAPI]
-    API -->|refine| LLM[OpenRouter LLM]
-    API -->|store| DB[(Supabase Postgres)]
-    API -.->|cache| Cache[(Redis / Memory)]
+flowchart TB
+    subgraph Frontend["Frontend (Vanilla HTML/CSS/JS)"]
+        Auth["/auth/ Sign In"]
+        Dashboard["/ Dashboard"]
+        Form["/form/ Course Submission"]
+        Courses["/courses/ Course Management"]
+        Preview["/preview/ PDF Preview"]
+        Editor["/live-editor/ Agentic Editor"]
+        Versions["/versions/ Version History"]
+    end
 
-    Admin[Admin] --> Editor[Agentic Editor]
-    Editor -->|chat + tools| API
-    Editor -->|review drafts| API
-    API -->|render| Jinja2[Jinja2 Templates]
-    Jinja2 -->|PDF| WeasyPrint[WeasyPrint]
-    WeasyPrint --> PDF[Curriculum PDF]
+    subgraph Backend["FastAPI Backend (/api)"]
+        direction TB
+        SubAPI["Submissions"]
+        CoursesAPI["Courses"]
+        PreviewAPI["Preview (8 endpoints)"]
+        AgentAPI["Agent (13 endpoints)"]
+        ChatAPI["Chat (SSE streaming)"]
+        VersionsAPI["Versions (10 endpoints)"]
+    end
+
+    subgraph Services["Services Layer"]
+        Refinement["Refinement\nLLM content extraction"]
+        AgentTools["Agent Tools\n35 tools"]
+        Diffing["Diffing\nprotected field validation"]
+        Curriculum["Curriculum\nsorting, snapshots"]
+        PreviewSvc["Preview\nbuild_course_preview"]
+        Rendering["Rendering\nJinja2 + WeasyPrint"]
+        Cache["Cache\nRedis + in-memory"]
+    end
+
+    subgraph External["External Services"]
+        LLM["OpenRouter\nPrimary + Fallback"]
+        Redis[("Upstash Redis")]
+        Supa[(Supabase Postgres)]
+        WeasyPrint["WeasyPrint\nA4 PDF"]
+    end
+
+    Auth -->|"JWT"| Dashboard
+    Dashboard --> Form & Courses & Preview & Editor & Versions
+
+    Form -->|"POST /submissions"| SubAPI
+    SubAPI --> Refinement
+    Refinement -->|"extract content"| LLM
+    Refinement -->|"store"| Supa
+
+    Courses --> CoursesAPI
+    CoursesAPI --> Cache
+    Cache -.->|"miss"| Supa
+
+    Preview --> PreviewAPI
+    PreviewAPI --> PreviewSvc
+    PreviewSvc --> Rendering
+    Rendering --> WeasyPrint
+
+    Editor -->|"SSE"| ChatAPI
+    ChatAPI --> LLM
+    LLM -->|"tool calls"| AgentTools
+    AgentTools --> Supa
+    ChatAPI -->|"save"| Supa
+
+    VersionsAPI --> Curriculum
+    Curriculum -->|"snapshot"| Supa
+
+    Editor -->|"review/apply"| AgentAPI
+    AgentAPI --> Diffing
+    Diffing -->|"validate"| Supa
+
+    Cache -.-> Redis
 ```
 
 | Layer | Stack |
 |---|---|
-| Backend | Python 3.12, FastAPI, Uvicorn |
+| Backend | Python 3.12, FastAPI 0.138, Uvicorn |
 | Frontend | Vanilla HTML/CSS/JS (no build step) |
 | Database | Supabase (PostgreSQL) |
 | Cache | Upstash Redis (optional, falls back to in-memory) |
 | AI/LLM | OpenRouter (streaming, tool calling, fallback model retry) |
-| PDF | Jinja2 + WeasyPrint (A4 layout) |
+| PDF | Jinja2 + WeasyPrint (A4 layout with PES University letterhead) |
 | Auth | Supabase Auth (JWT) |
 | Deploy | Docker on HF Spaces, Vercel frontend proxy |
-| Monitoring | Sentry (optional, error tracking) |
+| Monitoring | Sentry SDK (optional, error tracking) |
+
+Full architecture docs: [Architecture](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/architecture/)
 
 ## Features
 
-- **Course submission** with auto-parsed course codes (semester, department, credits extracted automatically)
+- **Course submission** with auto-parsed course codes (semester, department, credits extracted from the code itself)
 - **AI refinement** that preserves all syllabus topics, only cleans and structures content
-- **Full curriculum PDFs** in PES University's official A4 format with letterhead
-- **Agentic Editor** with AI assistant (SSE streaming, 35 tools, draft review, attachments)
-- **Reviewable drafts** (agent never auto-applies changes)
-- **Agent retry with fallback model** (fibonacci backoff on 502/503, automatic model switch)
-- **Chat persistence** (messages, tool calls, and results saved to database)
+- **Full curriculum PDFs** in PES University's official A4 format with letterhead, summary tables, and course details
+- **Agentic Editor** with AI assistant (SSE streaming, 35 tools, draft review, file attachments)
+- **Reviewable drafts** -- the agent never auto-applies changes; every edit goes through human review
+- **Agent retry with fallback model** (Fibonacci backoff on 502/503, automatic model switch)
+- **Chat persistence** (messages, tool calls, and tool results saved to database across sessions)
 - **Dynamic specialization management** (DB-driven tracks, not hardcoded)
 - **Version snapshots** with restore, revision history, and version-vs-version comparison
 - **Course visibility toggle** and credit-based sorting
 - **Dual cache layer** (Redis + in-memory, lazy invalidation)
-- **Authentication** via Supabase Auth
+- **Authentication** via Supabase Auth (JWT)
 
 ## Quick Start
 
@@ -89,6 +149,12 @@ cd backend && fastapi dev app/main.py
 ```
 
 Server at `http://127.0.0.1:8000`. API under `/api`. Frontend served from `frontend/`.
+
+```bash
+source .venv/bin/activate
+pytest                              # 229 tests
+python -m compileall backend/app    # also runs in CI
+```
 
 ## Agent Tools
 
@@ -102,28 +168,40 @@ The Agentic Editor includes an AI assistant with 35 tools for reading, writing, 
 | **Write (drafts)** | `create_course_draft`, `update_agent_draft`, `create_document_draft` | Propose changes for human review; update existing drafts instead of duplicating |
 | **Write (direct)** | `create_refined_course` | Create new courses directly (for brand-new courses only) |
 | **Write (specialization)** | `define_specialization`, `assign_elective_to_tracks`, `remove_elective_from_tracks`, `categorize_elective` | Manage elective tracks and AI-powered categorization |
-| **Write (protected)** | `update_deterministic_fields` | The only way to change protected fields; produces a blocked draft |
+| **Write (protected)** | `update_deterministic_fields` | The only way to change protected fields; produces a blocked draft requiring explicit user approval |
 | **Generate** | `create_report`, `create_spreadsheet`, `create_curriculum_version` | Markdown/PDF reports, CSV/Excel exports, version snapshots |
 | **Control** | `signal_done` | Signal task completion with a summary |
-
-Full tool schemas and documentation: [PESU Curriculum Docs](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/)
 
 ## Documentation
 
 Full documentation is on the [GitHub Pages site](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/):
 
-- [API Reference](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#api-reference) -- all 49 endpoints
-- [Database Schema](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#database-schema) -- 12 tables
-- [Local Development](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#local-development) -- setup and run
-- [Deployment](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#deployment) -- Docker, Vercel, HF Spaces
-- [Environment Variables](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#environment-variables) -- required and optional
-- [How It Works](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#how-it-works) -- submission pipeline, refinement, preview, specializations, agent system, versioning
+- [Architecture](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/architecture/) -- system design, data flow diagrams, project structure
+- [How It Works](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/how-it-works/) -- submission pipeline, refinement, preview, specializations, agent system, versioning
+- [API Reference](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/api-reference/) -- all 49 endpoints with request/response schemas
+- [Database Schema](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/database-schema/) -- 12 tables, status lifecycles, relationships
+- [Environment Variables](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/environment/) -- required and optional
+- [Deployment](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/deployment/) -- Docker, Vercel, HF Spaces, CI/CD
+- [Screenshots](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/screenshots/) -- visual walkthrough of every surface
 
 ## Project Structure
 
-See [docs/index.md#project-structure](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#project-structure) for the full breakdown.
+```
+backend/          FastAPI (Python) ASGI entrypoint at app/main.py
+frontend/         Vanilla HTML/CSS/JS, no build step
+docs/             Jekyll multi-page docs site (GitHub Pages)
+tests/            29 pytest files (229 tests)
+```
+
+Full breakdown: [Project Structure](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/architecture/#project-structure)
 
 ## Screenshots
+
+Scroll down for a visual overview, or visit the [Screenshots page](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/screenshots/) for all images on one page.
+
+### Sign In
+
+![Sign In -- email and password authentication via Supabase Auth](assets/images/auth_page.png)
 
 ### Dashboard
 
@@ -164,7 +242,3 @@ See [docs/index.md#project-structure](https://lonelyguy-se1.github.io/PESU-Curri
 ![Version Rename -- inline rename form for version names and categories](assets/images/versions_rename_category.png)
 
 ![Current Document Version -- live curriculum state shown as the "Current" entry](assets/images/versions_current_document.png)
-
-### Sign In
-
-![Sign In -- email and password authentication via Supabase Auth](assets/images/auth_page.png)
