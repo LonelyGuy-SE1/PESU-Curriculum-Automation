@@ -6,7 +6,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 MAX_FILE_BYTES = 8 * 1024 * 1024
-MAX_TEXT_CHARS = 50000
+MAX_TEXT_CHARS = 200000
 SPACE = re.compile(r"[ \t]+")
 BLANKS = re.compile(r"\n{3,}")
 
