@@ -375,61 +375,47 @@ flowchart TB
 
             <p><strong>Tools</strong> (<code>services/agent_tools.py</code>, registered in <code>TOOLS</code> - 35 total):</p>
 
-            <h3>Read (course data):</h3>
-            <ul>
-              <li><code>get_current_course_json</code> - full template-ready course JSON</li>
-              <li><code>get_course_codes</code> - lightweight IDs (refined_id, code, title, semester)</li>
-              <li><code>get_course_syllabus</code> - units, objectives, course_outcomes</li>
-              <li><code>get_course_textbooks</code> - text_books, reference_books</li>
-              <li><code>get_course_deterministic</code> - protected fields (read-only context)</li>
-              <li><code>get_course_lab</code> - lab experiments, tools/languages</li>
-              <li><code>get_course_fields</code> - arbitrary field subset for one course</li>
-              <li><code>batch_read_courses</code> - read specific fields from multiple courses in one call</li>
-              <li><code>get_curriculum_json</code> - full curriculum, optionally by semester</li>
-              <li><code>list_courses</code> - course IDs/titles, optionally by semester</li>
-              <li><code>get_curriculum_stats</code> - aggregate statistics (total courses, credits per semester, course type distribution)</li>
-            </ul>
-
-            <h3>Read (comparison/drafts):</h3>
-            <ul>
-              <li><code>diff_course_json</code> - compare two course JSONs</li>
-              <li><code>get_course_draft</code> / <code>get_document_draft</code> - read staged drafts</li>
-              <li><code>get_version</code> - load a curriculum version snapshot with its course list</li>
-              <li><code>diff_versions</code> - compare two version snapshots (added/removed/changed courses)</li>
-            </ul>
-
-            <h3>Read (specialization/external):</h3>
-            <ul>
-              <li><code>get_course_assignments</code> - which specialization tracks a course belongs to</li>
-              <li><code>list_specializations</code> - list track definitions</li>
-              <li><code>get_attachment_text</code> - read uploaded chat attachments</li>
-              <li><code>fetch_url</code> / <code>web_search</code> - external context</li>
-            </ul>
-
-            <h3>Write (always create reviewable drafts, never apply):</h3>
-            <ul>
-              <li><code>create_course_draft</code> - one course</li>
-              <li><code>update_agent_draft</code> - merge fields into an existing draft (avoids duplicates)</li>
-              <li><code>create_document_draft</code> - multiple courses</li>
-              <li><code>assign_elective_to_tracks</code> - categorize an elective</li>
-              <li><code>remove_elective_from_tracks</code> - remove a course from tracks</li>
-              <li><code>define_specialization</code> - create a track</li>
-              <li><code>categorize_elective</code> - AI-powered elective categorization into existing tracks</li>
-              <li><code>update_deterministic_fields</code> - the only way to change protected fields; produces a blocked draft that requires explicit user approval</li>
-            </ul>
-
-            <h3>Write (direct):</h3>
-            <ul>
-              <li><code>create_refined_course</code> - create new courses directly in refined_submissions (for brand-new courses only; for existing courses, use drafts)</li>
-            </ul>
-
-            <h3>Generate (files/reports):</h3>
-            <ul>
-              <li><code>create_spreadsheet</code> - generate CSV or Excel (.xlsx) files from structured row data</li>
-              <li><code>create_report</code> - generate markdown or PDF reports</li>
-              <li><code>create_curriculum_version</code> - snapshot the current curriculum state</li>
-              <li><code>signal_done</code> - signal task completion with a summary</li>
-            </ul>
+            <table>
+              <thead>
+                <tr><th>Tool</th><th>Category</th><th>Description</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>get_current_course_json</code></td><td>Read</td><td>Full template-ready course JSON</td></tr>
+                <tr><td><code>get_course_codes</code></td><td>Read</td><td>Lightweight IDs (refined_id, code, title, semester)</td></tr>
+                <tr><td><code>get_course_syllabus</code></td><td>Read</td><td>Units, objectives, course_outcomes</td></tr>
+                <tr><td><code>get_course_textbooks</code></td><td>Read</td><td>text_books, reference_books</td></tr>
+                <tr><td><code>get_course_deterministic</code></td><td>Read</td><td>Protected fields (read-only context)</td></tr>
+                <tr><td><code>get_course_lab</code></td><td>Read</td><td>Lab experiments, tools/languages</td></tr>
+                <tr><td><code>get_course_fields</code></td><td>Read</td><td>Arbitrary field subset for one course</td></tr>
+                <tr><td><code>batch_read_courses</code></td><td>Read</td><td>Read specific fields from multiple courses in one call</td></tr>
+                <tr><td><code>get_curriculum_json</code></td><td>Read</td><td>Full curriculum, optionally by semester</td></tr>
+                <tr><td><code>list_courses</code></td><td>Read</td><td>Course IDs/titles, optionally by semester</td></tr>
+                <tr><td><code>get_curriculum_stats</code></td><td>Read</td><td>Aggregate statistics (total courses, credits per semester, course type distribution)</td></tr>
+                <tr><td><code>diff_course_json</code></td><td>Read</td><td>Compare two course JSONs</td></tr>
+                <tr><td><code>get_course_draft</code></td><td>Read</td><td>Read a staged course draft</td></tr>
+                <tr><td><code>get_document_draft</code></td><td>Read</td><td>Read a staged document draft</td></tr>
+                <tr><td><code>get_version</code></td><td>Read</td><td>Load a curriculum version snapshot with its course list</td></tr>
+                <tr><td><code>diff_versions</code></td><td>Read</td><td>Compare two version snapshots (added/removed/changed courses)</td></tr>
+                <tr><td><code>get_course_assignments</code></td><td>Read</td><td>Which specialization tracks a course belongs to</td></tr>
+                <tr><td><code>list_specializations</code></td><td>Read</td><td>List track definitions</td></tr>
+                <tr><td><code>get_attachment_text</code></td><td>Read</td><td>Read uploaded chat attachments</td></tr>
+                <tr><td><code>fetch_url</code></td><td>Read</td><td>Fetch external URL content</td></tr>
+                <tr><td><code>web_search</code></td><td>Read</td><td>Search the web for external context</td></tr>
+                <tr><td><code>create_course_draft</code></td><td>Write</td><td>Propose changes for a single course (reviewable draft)</td></tr>
+                <tr><td><code>update_agent_draft</code></td><td>Write</td><td>Merge fields into an existing draft (avoids duplicates)</td></tr>
+                <tr><td><code>create_document_draft</code></td><td>Write</td><td>Propose changes for multiple courses (reviewable draft)</td></tr>
+                <tr><td><code>assign_elective_to_tracks</code></td><td>Write</td><td>Categorize an elective into specialization tracks</td></tr>
+                <tr><td><code>remove_elective_from_tracks</code></td><td>Write</td><td>Remove a course from specialization tracks</td></tr>
+                <tr><td><code>define_specialization</code></td><td>Write</td><td>Create a new specialization track</td></tr>
+                <tr><td><code>categorize_elective</code></td><td>Write</td><td>AI-powered elective categorization into existing tracks</td></tr>
+                <tr><td><code>update_deterministic_fields</code></td><td>Write</td><td>Change protected fields; produces a blocked draft requiring explicit user approval</td></tr>
+                <tr><td><code>create_refined_course</code></td><td>Write</td><td>Create new courses directly (for brand-new courses only)</td></tr>
+                <tr><td><code>create_spreadsheet</code></td><td>Generate</td><td>Generate CSV or Excel (.xlsx) files from structured row data</td></tr>
+                <tr><td><code>create_report</code></td><td>Generate</td><td>Generate markdown or PDF reports</td></tr>
+                <tr><td><code>create_curriculum_version</code></td><td>Generate</td><td>Snapshot the current curriculum state</td></tr>
+                <tr><td><code>signal_done</code></td><td>Control</td><td>Signal task completion with a summary</td></tr>
+              </tbody>
+            </table>
 
             <p><strong>SSE event types</strong> (streamed from <code>POST /chat/sessions/{id}/messages</code>):</p>
             <ul>

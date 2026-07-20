@@ -18,9 +18,12 @@ body {
   gap: 12px;
   padding: 12px 24px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin: 16px 24px 0;
+  box-shadow: var(--shadow-sm);
   position: sticky;
-  top: 0;
+  top: 16px;
   z-index: 100;
 }
 
@@ -53,9 +56,9 @@ body {
   width: 220px;
   flex-shrink: 0;
   position: sticky;
-  top: 60px;
+  top: 72px;
   align-self: flex-start;
-  max-height: calc(100dvh - 80px);
+  max-height: calc(100dvh - 88px);
   overflow-y: auto;
 }
 
