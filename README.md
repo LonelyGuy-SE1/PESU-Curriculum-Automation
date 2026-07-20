@@ -112,18 +112,24 @@ Full tool schemas and documentation: [Syntagma Docs](https://lonelyguy-se1.githu
 
 Full documentation is on the [GitHub Pages site](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/):
 
-- [API Reference](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#api-reference) -- all 49 endpoints
-- [Database Schema](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#database-schema) -- 12 tables
-- [Local Development](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#local-development) -- setup and run
-- [Deployment](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#deployment) -- Docker, Vercel, HF Spaces
-- [Environment Variables](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#environment-variables) -- required and optional
-- [How It Works](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#how-it-works) -- submission pipeline, refinement, preview, specializations, agent system, versioning
+- [API Reference](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/api-reference/) -- all 49 endpoints
+- [Database Schema](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/database-schema/) -- 12 tables
+- [How It Works](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/how-it-works/) -- submission pipeline, refinement, preview, specializations, agent system, versioning
+- [Deployment](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/deployment/) -- Docker, Vercel, HF Spaces
+- [Environment Variables](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/environment/) -- required and optional
+- [Screenshots](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/screenshots/) -- visual walkthrough of every surface
 
 ## Project Structure
 
 See [docs/index.md#project-structure](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/#project-structure) for the full breakdown.
 
 ## Screenshots
+
+Scroll down for a visual overview, or visit the [Screenshots page](https://lonelyguy-se1.github.io/PESU-Curriculum-Automation/screenshots/) for all images on one page.
+
+### Sign In
+
+![Sign In -- email and password authentication via Supabase Auth](assets/images/auth_page.png)
 
 ### Dashboard
 
@@ -164,7 +170,3 @@ See [docs/index.md#project-structure](https://lonelyguy-se1.github.io/PESU-Curri
 ![Version Rename -- inline rename form for version names and categories](assets/images/versions_rename_category.png)
 
 ![Current Document Version -- live curriculum state shown as the "Current" entry](assets/images/versions_current_document.png)
-
-### Sign In
-
-![Sign In -- email and password authentication via Supabase Auth](assets/images/auth_page.png)
