@@ -695,7 +695,7 @@ All paths are prefixed with `/api` at runtime.
 | `/api/chat/sessions/{id}` | PATCH | Rename a session. Body: `{ title }`. |
 | `/api/chat/sessions/{id}` | DELETE | Soft-archive a session and its messages. |
 | `/api/chat/sessions/{id}/messages` | GET | Fetch all messages in a session. |
-| `/api/chat/sessions/{id}/messages` | POST | Send a message and stream response via SSE. Events: `status`, `token`, `tool_call`, `tool_result`, `draft`, `document_draft`, `refined_course`, `context_usage`, `error`, `done`. |
+| `/api/chat/sessions/{id}/messages` | POST | Send a message and stream response via SSE. Events: `status`, `token`, `tool_call`, `tool_result`, `draft`, `document_draft`, `refined_course`, `cont[...]` |
 | `/api/chat/sessions/{id}/attachments` | POST | Upload files (multipart/form-data). 10MB/file, 25MB total. |
 | `/api/chat/sessions/{id}/attachments/{att_id}/download` | GET | Download an attachment. |
 | `/api/chat/sessions/{id}/attachments/{att_id}/preview` | GET | Preview an attachment inline. |
@@ -827,7 +827,7 @@ frontend is also deployable; `frontend/vercel.json` rewrites `/api/*` to the bac
 Templates live in `backend/app/templates/`. They receive context built in
 `services/preview.py` + the route. Prefer adding data to `build_course_preview` /
 `build_specialization_context` over hardcoding anything in HTML. The `do` extension
-is enabled, so `{% set x = [] %}{% do x.append(...) %}` works. Always read
+is enabled, so {% raw %}`{% set x = [] %}{% do x.append(...) %}`{% endraw %} works. Always read
 list context through `|default([])` so a missing key never crashes rendering.
 
 ### Key templates
