@@ -37,7 +37,7 @@ mdurl==0.1.2
 multidict==6.7.1
 openpyxl==3.1.5
 packaging==26.2
-pillow==12.2.0
+pillow==12.3.0
 pluggy==1.6.0
 postgrest==2.31.0
 propcache==0.5.2
